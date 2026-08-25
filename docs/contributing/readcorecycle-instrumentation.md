@@ -43,11 +43,12 @@ implementation.
 
 ## Freeze after validation
 
-The tool ABI is version 1. It becomes frozen after a server-84 run proves all
-of the following with real nonzero PMCCNTR samples: begin/end/delta consistency,
-complete sequence, fixed owner CPU, migration zero, lost zero, successful cold
-CSV export, and explicit cycles-to-microseconds conversion using a verified
-CPU frequency and PMCR divider state.
+**Status: ABI v1 is frozen.** The server-84 validation gate passed on
+2026-08-25 at repository commit `5c2a47143d2fb2310cf0055349acbb409bf9d514`.
+It proved real nonzero PMCCNTR begin/end/delta consistency, complete sequence,
+fixed owner CPU, migration zero, lost zero, successful cold CSV export, and
+explicit cycles-to-microseconds conversion using a verified CPU frequency and
+PMCR divider state.
 
 After that gate passes, do not modify the three canonical files or the three
 auxiliary files. Add future measurement sites only in target implementation
