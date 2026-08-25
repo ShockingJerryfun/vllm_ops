@@ -155,3 +155,6 @@ vulnerability process.
 - **Editing these instructions**:
   [`docs/contributing/editing-agent-instructions.md`](docs/contributing/editing-agent-instructions.md)
   — Rules for modifying AGENTS.md or any domain-specific guide it references.
+- **ReadCoreCycle instrumentation**:
+  [`docs/contributing/readcorecycle-instrumentation.md`](docs/contributing/readcorecycle-instrumentation.md)
+  — Mandatory single-source timing contract and pre-build duplication gate.
