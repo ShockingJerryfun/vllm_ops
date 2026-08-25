@@ -1,0 +1,3 @@
+repository=https://github.com/vllm-project/flash-attention.git
+commit=caaa4eb59845388a20b1f435ecaafb4bd9517ad8
+scope=editable FA2 launch source only; full build tree and build outputs live on server-84

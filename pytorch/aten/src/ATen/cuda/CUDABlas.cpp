@@ -9,6 +9,7 @@
 #include <ATen/cuda/tunable/Tunable.h>
 #include <ATen/cuda/tunable/TunableGemm.h>
 #include <c10/macros/Export.h>
+#include <c10/util/ReadCoreCycleProbe.h>
 #include <c10/util/irange.h>
 #include <c10/core/ScalarType.h>
 
@@ -1243,7 +1244,13 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
   auto compute_type = CUDA_R_32F;
 #endif
   TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, cublas_flags));
-  TORCH_CUDABLAS_CHECK(cublasGemmEx(
+#if RCC_SITE_ENABLED(RCC_SITE_GEMM_CUBLAS_GEMM_EX)
+  const bool record_gemm =
+      c10::rcc::Selected(RCC_SITE_GEMM_CUBLAS_GEMM_EX);
+  const std::uint64_t gemm_begin =
+      record_gemm ? c10::rcc::ReadCoreCycle() : 0;
+#endif
+  const cublasStatus_t gemm_status = cublasGemmEx(
       handle,
       opa,
       opb,
@@ -1262,7 +1269,15 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
       std::is_same_v<C_Dtype, float> ? CUDA_R_32F : CUDA_R_16BF,
       ldc,
       compute_type,
-      CUBLAS_GEMM_DEFAULT_TENSOR_OP));
+      CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+#if RCC_SITE_ENABLED(RCC_SITE_GEMM_CUBLAS_GEMM_EX)
+  if (record_gemm) {
+    const std::uint64_t gemm_end = c10::rcc::ReadCoreCycle();
+    c10::rcc::RecordAfterEnd(
+        RCC_SITE_GEMM_CUBLAS_GEMM_EX, 1, gemm_begin, gemm_end);
+  }
+#endif
+  TORCH_CUDABLAS_CHECK(gemm_status);
   TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
 }
 

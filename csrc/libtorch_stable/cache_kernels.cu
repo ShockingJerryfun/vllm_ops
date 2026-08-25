@@ -7,6 +7,8 @@
 #include "quantization/vectorization_utils.cuh"
 #include "concat_mla_q.cuh"
 
+#include <c10/util/ReadCoreCycleProbe.h>
+
 #ifdef USE_ROCM
   #include "../quantization/w8a8/fp8/amd/quant_utils.cuh"
 #else
@@ -792,6 +794,11 @@ void reshape_and_cache_flash(
   }
 
   // Original FP8/auto path.
+#if RCC_SITE_ENABLED(RCC_SITE_KV_CACHE_IMPL)
+  const bool record_kv = c10::rcc::Selected(RCC_SITE_KV_CACHE_IMPL);
+  const std::uint64_t kv_begin =
+      record_kv ? c10::rcc::ReadCoreCycle() : 0;
+#endif
   int block_size = key_cache.size(1);
 
   int64_t key_stride = key.stride(0);
@@ -812,6 +819,13 @@ void reshape_and_cache_flash(
 
   DISPATCH_BY_KV_CACHE_DTYPE(key.scalar_type(), kv_cache_dtype,
                              CALL_RESHAPE_AND_CACHE_FLASH);
+#if RCC_SITE_ENABLED(RCC_SITE_KV_CACHE_IMPL)
+  if (record_kv) {
+    const std::uint64_t kv_end = c10::rcc::ReadCoreCycle();
+    c10::rcc::RecordAfterEnd(
+        RCC_SITE_KV_CACHE_IMPL, 1, kv_begin, kv_end);
+  }
+#endif
 }
 
 // KV_T is the data type of key and value tensors.

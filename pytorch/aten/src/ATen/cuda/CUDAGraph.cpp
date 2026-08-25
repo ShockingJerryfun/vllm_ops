@@ -5,6 +5,7 @@
 #include <ATen/cuda/MemPool.h>
 #include <ATen/Functions.h>
 #include <c10/cuda/CUDAFunctions.h>
+#include <c10/util/ReadCoreCycleProbe.h>
 
 #include <cstddef>
 
@@ -198,14 +199,55 @@ void CUDAGraph::replay() {
     instantiate();
   }
 
+#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R1)
+  const bool record_r1 = c10::rcc::Selected(RCC_SITE_REPLAY_R1);
+  const std::uint64_t r1_begin =
+      record_r1 ? c10::rcc::ReadCoreCycle() : 0;
+#endif
+
   c10::OptionalDeviceGuard device_guard{capture_stream_.device()};
 
   for (auto& [generator_state, wholegraph_increments] :
        captured_generator_states_) {
     generator_state->replay_prologue(wholegraph_increments);
   }
+#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R1)
+  if (record_r1) {
+    const std::uint64_t r1_end = c10::rcc::ReadCoreCycle();
+    c10::rcc::RecordAfterEnd(
+        RCC_SITE_REPLAY_R1, 1, r1_begin, r1_end);
+  }
+#endif
+
   // graph_exec_ may be replayed in any stream.
-  AT_CUDA_CHECK(cudaGraphLaunch(graph_exec_, at::cuda::getCurrentCUDAStream()));
+#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R2)
+  const bool record_r2 = c10::rcc::Selected(RCC_SITE_REPLAY_R2);
+  const std::uint64_t r2_begin =
+      record_r2 ? c10::rcc::ReadCoreCycle() : 0;
+#endif
+  const auto stream = at::cuda::getCurrentCUDAStream();
+#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R2)
+  if (record_r2) {
+    const std::uint64_t r2_end = c10::rcc::ReadCoreCycle();
+    c10::rcc::RecordAfterEnd(
+        RCC_SITE_REPLAY_R2, 2, r2_begin, r2_end);
+  }
+#endif
+
+#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R3)
+  const bool record_r3 = c10::rcc::Selected(RCC_SITE_REPLAY_R3);
+  const std::uint64_t r3_begin =
+      record_r3 ? c10::rcc::ReadCoreCycle() : 0;
+#endif
+  const cudaError_t launch_status = cudaGraphLaunch(graph_exec_, stream);
+#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R3)
+  if (record_r3) {
+    const std::uint64_t r3_end = c10::rcc::ReadCoreCycle();
+    c10::rcc::RecordAfterEnd(
+        RCC_SITE_REPLAY_R3, 3, r3_begin, r3_end);
+  }
+#endif
+  AT_CUDA_CHECK(launch_status);
 }
 
 void CUDAGraph::enable_debug_mode() {
