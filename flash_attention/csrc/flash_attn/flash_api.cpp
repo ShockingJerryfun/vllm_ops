@@ -6,7 +6,7 @@
 #include <torch/nn/functional.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAStream.h>
-#include <c10/util/ReadCoreCycleProbe.h>
+#include "read_core_cycle_runtime.h"
 #include <ATen/cuda/CUDAGeneratorImpl.h>  // For at::Generator and at::PhiloxCudaState
 #include "philox_unpack.cuh"  // For at::cuda::philox::unpack
 
@@ -22,6 +22,8 @@
 #define CHECK_CONTIGUOUS(x) TORCH_CHECK(x.is_contiguous(), #x " must be contiguous")
 
 namespace FLASH_NAMESPACE {
+
+constexpr std::uint16_t kRccFa2VarlenDispatch = 460;
 
 void set_params_fprop(Flash_fwd_params &params,
                       // sizes
@@ -746,18 +748,20 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
 
     if (max_seqlen_k > 0) {
         auto stream = at::cuda::getCurrentCUDAStream().stream();
-#if RCC_SITE_ENABLED(RCC_SITE_FA2_RUN_MHA_FWD)
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
         const bool record_fa2 =
-            c10::rcc::Selected(RCC_SITE_FA2_RUN_MHA_FWD);
+            vllm::instrumentation::ReadCoreCycleSiteSelected(
+                kRccFa2VarlenDispatch);
         const std::uint64_t fa2_begin =
-            record_fa2 ? c10::rcc::ReadCoreCycle() : 0;
+            record_fa2 ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
         run_mha_fwd(params, stream, paged_KV);
-#if RCC_SITE_ENABLED(RCC_SITE_FA2_RUN_MHA_FWD)
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
         if (record_fa2) {
-            const std::uint64_t fa2_end = c10::rcc::ReadCoreCycle();
-            c10::rcc::RecordAfterEnd(
-                RCC_SITE_FA2_RUN_MHA_FWD, 1, fa2_begin, fa2_end);
+            const std::uint64_t fa2_end =
+                vllm::instrumentation::ReadCoreCycle();
+            vllm::instrumentation::CommitReadCoreCycleSample(
+                kRccFa2VarlenDispatch, 1, fa2_begin, fa2_end);
         }
 #endif
     } else {

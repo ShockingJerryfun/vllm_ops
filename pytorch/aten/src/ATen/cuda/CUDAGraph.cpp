@@ -5,11 +5,15 @@
 #include <ATen/cuda/MemPool.h>
 #include <ATen/Functions.h>
 #include <c10/cuda/CUDAFunctions.h>
-#include <c10/util/ReadCoreCycleProbe.h>
+#include <read_core_cycle_runtime.h>
 
 #include <cstddef>
 
 namespace at::cuda {
+
+constexpr std::uint16_t kRccReplayR1 = 340;
+constexpr std::uint16_t kRccReplayR2 = 341;
+constexpr std::uint16_t kRccReplayR3 = 342;
 
 static bool _cuda_graphs_debug = false;
 
@@ -199,10 +203,11 @@ void CUDAGraph::replay() {
     instantiate();
   }
 
-#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R1)
-  const bool record_r1 = c10::rcc::Selected(RCC_SITE_REPLAY_R1);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_r1 =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccReplayR1);
   const std::uint64_t r1_begin =
-      record_r1 ? c10::rcc::ReadCoreCycle() : 0;
+      record_r1 ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
 
   c10::OptionalDeviceGuard device_guard{capture_stream_.device()};
@@ -211,40 +216,45 @@ void CUDAGraph::replay() {
        captured_generator_states_) {
     generator_state->replay_prologue(wholegraph_increments);
   }
-#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R1)
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   if (record_r1) {
-    const std::uint64_t r1_end = c10::rcc::ReadCoreCycle();
-    c10::rcc::RecordAfterEnd(
-        RCC_SITE_REPLAY_R1, 1, r1_begin, r1_end);
+    const std::uint64_t r1_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccReplayR1, 1, r1_begin, r1_end);
   }
 #endif
 
   // graph_exec_ may be replayed in any stream.
-#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R2)
-  const bool record_r2 = c10::rcc::Selected(RCC_SITE_REPLAY_R2);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_r2 =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccReplayR2);
   const std::uint64_t r2_begin =
-      record_r2 ? c10::rcc::ReadCoreCycle() : 0;
+      record_r2 ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   const auto stream = at::cuda::getCurrentCUDAStream();
-#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R2)
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   if (record_r2) {
-    const std::uint64_t r2_end = c10::rcc::ReadCoreCycle();
-    c10::rcc::RecordAfterEnd(
-        RCC_SITE_REPLAY_R2, 2, r2_begin, r2_end);
+    const std::uint64_t r2_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccReplayR2, 2, r2_begin, r2_end);
   }
 #endif
 
-#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R3)
-  const bool record_r3 = c10::rcc::Selected(RCC_SITE_REPLAY_R3);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_r3 =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccReplayR3);
   const std::uint64_t r3_begin =
-      record_r3 ? c10::rcc::ReadCoreCycle() : 0;
+      record_r3 ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   const cudaError_t launch_status = cudaGraphLaunch(graph_exec_, stream);
-#if RCC_SITE_ENABLED(RCC_SITE_REPLAY_R3)
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   if (record_r3) {
-    const std::uint64_t r3_end = c10::rcc::ReadCoreCycle();
-    c10::rcc::RecordAfterEnd(
-        RCC_SITE_REPLAY_R3, 3, r3_begin, r3_end);
+    const std::uint64_t r3_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccReplayR3, 3, r3_begin, r3_end);
   }
 #endif
   AT_CUDA_CHECK(launch_status);

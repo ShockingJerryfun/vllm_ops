@@ -7,12 +7,14 @@
 namespace vllm::instrumentation {
 
 struct ReadCoreCycleEvent final {
+  std::uint64_t begin_cycle;
+  std::uint64_t end_cycle;
   std::uint64_t delta_cycles;
   std::uint32_t context_id;
   std::uint16_t site_id;
   std::uint16_t stage_id;
 };
-static_assert(sizeof(ReadCoreCycleEvent) == 16);
+static_assert(sizeof(ReadCoreCycleEvent) == 32);
 
 template <std::size_t MaxEvents>
 class ReadCoreCycleRecorder final {
@@ -47,8 +49,8 @@ class ReadCoreCycleRecorder final {
       ++lost_count_;
       return;
     }
-    events_[index] =
-        ReadCoreCycleEvent{end - begin, context_id, site_id, stage_id};
+    events_[index] = ReadCoreCycleEvent{
+        begin, end, end - begin, context_id, site_id, stage_id};
     cursor_ = index + 1;
   }
 

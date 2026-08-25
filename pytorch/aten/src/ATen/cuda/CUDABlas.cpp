@@ -9,7 +9,7 @@
 #include <ATen/cuda/tunable/Tunable.h>
 #include <ATen/cuda/tunable/TunableGemm.h>
 #include <c10/macros/Export.h>
-#include <c10/util/ReadCoreCycleProbe.h>
+#include <read_core_cycle_runtime.h>
 #include <c10/util/irange.h>
 #include <c10/core/ScalarType.h>
 
@@ -257,6 +257,8 @@ struct CublasLtWorkspace {
 } // anonymous namespace
 
 namespace at::cuda::blas {
+
+constexpr std::uint16_t kRccGemmBf16Dispatch = 400;
 
 /* LEVEL 3 BLAS FUNCTIONS */
 
@@ -1243,13 +1245,14 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
 #else
   auto compute_type = CUDA_R_32F;
 #endif
-  TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, cublas_flags));
-#if RCC_SITE_ENABLED(RCC_SITE_GEMM_CUBLAS_GEMM_EX)
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const bool record_gemm =
-      c10::rcc::Selected(RCC_SITE_GEMM_CUBLAS_GEMM_EX);
+      vllm::instrumentation::ReadCoreCycleSiteSelected(
+          kRccGemmBf16Dispatch);
   const std::uint64_t gemm_begin =
-      record_gemm ? c10::rcc::ReadCoreCycle() : 0;
+      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
+  TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, cublas_flags));
   const cublasStatus_t gemm_status = cublasGemmEx(
       handle,
       opa,
@@ -1270,15 +1273,16 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
       ldc,
       compute_type,
       CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-#if RCC_SITE_ENABLED(RCC_SITE_GEMM_CUBLAS_GEMM_EX)
-  if (record_gemm) {
-    const std::uint64_t gemm_end = c10::rcc::ReadCoreCycle();
-    c10::rcc::RecordAfterEnd(
-        RCC_SITE_GEMM_CUBLAS_GEMM_EX, 1, gemm_begin, gemm_end);
-  }
-#endif
   TORCH_CUDABLAS_CHECK(gemm_status);
   TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_gemm) {
+    const std::uint64_t gemm_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccGemmBf16Dispatch, 1, gemm_begin, gemm_end);
+  }
+#endif
 }
 
 template <>

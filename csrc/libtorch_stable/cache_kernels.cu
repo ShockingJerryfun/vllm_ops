@@ -7,7 +7,7 @@
 #include "quantization/vectorization_utils.cuh"
 #include "concat_mla_q.cuh"
 
-#include <c10/util/ReadCoreCycleProbe.h>
+#include "read_core_cycle_runtime.h"
 
 #ifdef USE_ROCM
   #include "../quantization/w8a8/fp8/amd/quant_utils.cuh"
@@ -31,6 +31,8 @@ constexpr float kFp8ScaleDivisor = 224.f;
 #else
 constexpr float kFp8ScaleDivisor = 448.f;
 #endif
+
+constexpr std::uint16_t kRccKvCacheFlashDispatch = 450;
 
 void swap_blocks(torch::stable::Tensor& src, torch::stable::Tensor& dst,
                  int64_t block_size_in_bytes,
@@ -732,18 +734,41 @@ void reshape_and_cache(
 // KV_T is the data type of key and value tensors.
 // CACHE_T is the stored data type of kv-cache.
 // KV_DTYPE is the real data type of kv-cache.
-#define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)                \
-  vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>              \
-      <<<grid, block, 0, stream>>>(                                          \
-          reinterpret_cast<KV_T*>(key.data_ptr()),                           \
-          reinterpret_cast<KV_T*>(value.data_ptr()),                         \
-          reinterpret_cast<CACHE_T*>(key_cache.data_ptr()),                  \
-          reinterpret_cast<CACHE_T*>(value_cache.data_ptr()),                \
-          slot_mapping.const_data_ptr<int64_t>(), block_stride, page_stride, \
-          head_stride, key_stride, value_stride, num_heads, head_size,       \
-          block_size, reinterpret_cast<const float*>(k_scale.data_ptr()),    \
-          reinterpret_cast<const float*>(v_scale.data_ptr()),                \
-          kv_scale_stride);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  #define RCC_RESHAPE_AND_CACHE_FLASH_BEGIN()                                \
+    const bool record_kv =                                                   \
+        vllm::instrumentation::ReadCoreCycleSiteSelected(                    \
+            kRccKvCacheFlashDispatch);                                       \
+    const std::uint64_t kv_begin =                                           \
+        record_kv ? vllm::instrumentation::ReadCoreCycle() : 0;
+  #define RCC_RESHAPE_AND_CACHE_FLASH_END()                                  \
+    if (record_kv) {                                                         \
+      const std::uint64_t kv_end =                                           \
+          vllm::instrumentation::ReadCoreCycle();                            \
+      vllm::instrumentation::CommitReadCoreCycleSample(                      \
+          kRccKvCacheFlashDispatch, 1, kv_begin, kv_end);                    \
+    }
+#else
+  #define RCC_RESHAPE_AND_CACHE_FLASH_BEGIN()
+  #define RCC_RESHAPE_AND_CACHE_FLASH_END()
+#endif
+
+#define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)                 \
+  do {                                                                        \
+    RCC_RESHAPE_AND_CACHE_FLASH_BEGIN()                                       \
+    vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>             \
+        <<<grid, block, 0, stream>>>(                                         \
+            reinterpret_cast<KV_T*>(key.data_ptr()),                          \
+            reinterpret_cast<KV_T*>(value.data_ptr()),                        \
+            reinterpret_cast<CACHE_T*>(key_cache.data_ptr()),                 \
+            reinterpret_cast<CACHE_T*>(value_cache.data_ptr()),               \
+            slot_mapping.const_data_ptr<int64_t>(), block_stride, page_stride,\
+            head_stride, key_stride, value_stride, num_heads, head_size,      \
+            block_size, reinterpret_cast<const float*>(k_scale.data_ptr()),   \
+            reinterpret_cast<const float*>(v_scale.data_ptr()),               \
+            kv_scale_stride);                                                 \
+    RCC_RESHAPE_AND_CACHE_FLASH_END()                                         \
+  } while (false)
 
 void reshape_and_cache_flash(
     torch::stable::Tensor& key,    // [num_tokens, num_heads, head_size]
@@ -794,11 +819,6 @@ void reshape_and_cache_flash(
   }
 
   // Original FP8/auto path.
-#if RCC_SITE_ENABLED(RCC_SITE_KV_CACHE_IMPL)
-  const bool record_kv = c10::rcc::Selected(RCC_SITE_KV_CACHE_IMPL);
-  const std::uint64_t kv_begin =
-      record_kv ? c10::rcc::ReadCoreCycle() : 0;
-#endif
   int block_size = key_cache.size(1);
 
   int64_t key_stride = key.stride(0);
@@ -819,14 +839,11 @@ void reshape_and_cache_flash(
 
   DISPATCH_BY_KV_CACHE_DTYPE(key.scalar_type(), kv_cache_dtype,
                              CALL_RESHAPE_AND_CACHE_FLASH);
-#if RCC_SITE_ENABLED(RCC_SITE_KV_CACHE_IMPL)
-  if (record_kv) {
-    const std::uint64_t kv_end = c10::rcc::ReadCoreCycle();
-    c10::rcc::RecordAfterEnd(
-        RCC_SITE_KV_CACHE_IMPL, 1, kv_begin, kv_end);
-  }
-#endif
 }
+
+#undef CALL_RESHAPE_AND_CACHE_FLASH
+#undef RCC_RESHAPE_AND_CACHE_FLASH_BEGIN
+#undef RCC_RESHAPE_AND_CACHE_FLASH_END
 
 // KV_T is the data type of key and value tensors.
 // CACHE_T is the stored data type of kv-cache.
