@@ -53,9 +53,6 @@ A tool change requires explicit user approval and an ABI version increment.
 Builds, server runs, observer-effect checks, and measurements also require an
 explicit request; they must not be inferred from a request to add timing sites.
 
-For the current task state, completion boundary, and handoff workflow, read
-[`READCORECYCLE_TASK_HANDOFF.md`](../../READCORECYCLE_TASK_HANDOFF.md).
-
 ## Immutable timing boundary
 
 Raw latency must come only from the canonical serialized reader:
