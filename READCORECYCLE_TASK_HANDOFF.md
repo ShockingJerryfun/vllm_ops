@@ -147,6 +147,9 @@ RMSNorm/融合 Norm、SiLU/门控融合、RoPE 等尚未落点。因此不得对
 ## 8. 交接时的干净状态
 
 - server-84 `/home/fj` 顶层仅有 `project_archive`、`vllm_fj`、`vllm_ops`
+- server-84 的 `vllm_ops` 工作树干净，当前停在 `5500c8b7b`；2026-08-25
+  执行 HTTPS `git pull --ff-only` 因服务器没有 GitHub 凭据而失败。不得把
+  本机密钥复制过去或擅自旁路传文件；需由用户授权服务器认证方式后再拉取
 - 旧 `script` 中两个 Topdown 脚本已可恢复地归档到
   `/home/fj/project_archive/script_topdown_v011_20260818`
 - 本次错误实测产生的 server 临时构建、seed、source 和 evidence 已删除
@@ -159,4 +162,6 @@ RMSNorm/融合 Norm、SiLU/门控融合、RoPE 等尚未落点。因此不得对
 - 上游基础：vLLM 0.26 源码线
 - 工具定稿提交：`5c2a47143`
 - 此交接前仓库基线：`5500c8b7b`
-- 最终以 `origin/main` 的最新提交为准，服务器必须 fast-forward 拉取
+- 首次纠偏交接提交：`b6c19a299`
+- 最终以 `origin/main` 的最新提交为准；服务器认证恢复后必须 fast-forward
+  拉取，拉取前不得构建或运行
