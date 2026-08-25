@@ -41,20 +41,20 @@ the smallest reuse-based change, and obtain explicit user approval before
 changing the tool contract. Integration convenience never authorizes a second
 implementation.
 
-## Freeze after validation
+## Frozen tool boundary
 
-**Status: ABI v1 is frozen.** The server-84 validation gate passed on
-2026-08-25 at repository commit `5c2a47143d2fb2310cf0055349acbb409bf9d514`.
-It proved real nonzero PMCCNTR begin/end/delta consistency, complete sequence,
-fixed owner CPU, migration zero, lost zero, successful cold CSV export, and
-explicit cycles-to-microseconds conversion using a verified CPU frequency and
-PMCR divider state.
+**Status: ABI v1 is user-locked.** Do not modify the three canonical files or
+the three auxiliary files. The off-scope smoke run from 2026-08-25 was removed
+and is not acceptance evidence for the current task. This lock comes from the
+agreed tool contract, not from that run.
 
-After that gate passes, do not modify the three canonical files or the three
-auxiliary files. Add future measurement sites only in target implementation
-sources and external evidence mappings. A tool change after freeze requires
-explicit user approval, an ABI version increment, a fresh observer-effect
-check, and a fresh server-84 validation run.
+Add future measurement sites only in confirmed target implementation sources.
+A tool change requires explicit user approval and an ABI version increment.
+Builds, server runs, observer-effect checks, and measurements also require an
+explicit request; they must not be inferred from a request to add timing sites.
+
+For the current task state, completion boundary, and handoff workflow, read
+[`READCORECYCLE_TASK_HANDOFF.md`](../../READCORECYCLE_TASK_HANDOFF.md).
 
 ## Immutable timing boundary
 
