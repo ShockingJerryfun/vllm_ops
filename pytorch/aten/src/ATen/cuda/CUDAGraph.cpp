@@ -14,12 +14,11 @@ namespace at::cuda {
 namespace {
 
 constexpr std::uint16_t kRccGraphSite = 700;
-constexpr std::uint16_t kRccCaptureBeginApi = 1;
-constexpr std::uint16_t kRccCaptureEndApi = 2;
-constexpr std::uint16_t kRccInstantiateApi = 3;
-constexpr std::uint16_t kRccReplayState = 50;
+constexpr std::uint16_t kRccReplayTotal = 50;
 constexpr std::uint16_t kRccReplayPrologue = 51;
-constexpr std::uint16_t kRccReplayApi = 52;
+constexpr std::uint16_t kRccReplayStream = 52;
+constexpr std::uint16_t kRccReplayLaunch = 53;
+constexpr std::uint16_t kRccReplayTail = 54;
 
 }  // namespace
 
@@ -128,23 +127,7 @@ void CUDAGraph::capture_begin(MempoolId_t pool/*=0*/, cudaStreamCaptureMode capt
   // cudaStreamCaptureModeGlobal is the most conservative option to
   // prevent potentially unsafe CUDA API calls during capture.  See
   // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__STREAM.html#group__CUDART__STREAM_1g9d0535d93a214cbf126835257b16ba85
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_graph =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
-  const std::uint64_t api_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
-#endif
-  const cudaError_t begin_status =
-      cudaStreamBeginCapture(capture_stream_, capture_mode);
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_graph) {
-    const std::uint64_t api_end =
-        vllm::instrumentation::ReadCoreCycle();
-    vllm::instrumentation::CommitReadCoreCycleSample(
-        kRccGraphSite, kRccCaptureBeginApi, api_begin, api_end);
-  }
-#endif
-  AT_CUDA_CHECK(begin_status);
+  AT_CUDA_CHECK(cudaStreamBeginCapture(capture_stream_, capture_mode));
 
   cudaStreamCaptureStatus status{};
   AT_CUDA_CHECK(cudaStreamGetCaptureInfo(stream, &status, &capture_id_));
@@ -158,23 +141,7 @@ void CUDAGraph::capture_end() {
   TORCH_CHECK(stream.stream() == capture_stream_.stream(),
               "Capture must end on the same stream it began on.");
 
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_graph =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
-  const std::uint64_t api_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
-#endif
-  const cudaError_t end_status =
-      cudaStreamEndCapture(capture_stream_, &graph_);
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_graph) {
-    const std::uint64_t api_end =
-        vllm::instrumentation::ReadCoreCycle();
-    vllm::instrumentation::CommitReadCoreCycleSample(
-        kRccGraphSite, kRccCaptureEndApi, api_begin, api_end);
-  }
-#endif
-  AT_CUDA_CHECK(end_status);
+  AT_CUDA_CHECK(cudaStreamEndCapture(capture_stream_, &graph_));
 
   c10::cuda::CUDACachingAllocator::endAllocateToPool(capture_dev_, mempool_id_);
   at::getHostAllocator(at::kCUDA)->end_allocate_to_pool(mempool_id_);
@@ -222,32 +189,15 @@ void CUDAGraph::instantiate() {
   // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__GRAPH.html#group__CUDART__GRAPH_1g1accfe1da0c605a577c22d9751a09597
   // cudaGraphInstantiateWithFlags
   // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__GRAPH.html#group__CUDART__GRAPH_1ga2c652a24ba93e52b99a47bec0888233
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_graph =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
-  const std::uint64_t api_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
-#endif
 #if !defined(USE_ROCM)
-  const cudaError_t instantiate_status =
-      cudaGraphInstantiateWithFlags(&graph_exec_,
-                                    graph_,
-                                    cudaGraphInstantiateFlagAutoFreeOnLaunch | cudaGraphInstantiateFlagUseNodePriority);
+  AT_CUDA_CHECK(cudaGraphInstantiateWithFlags(&graph_exec_,
+                                              graph_,
+                                              cudaGraphInstantiateFlagAutoFreeOnLaunch | cudaGraphInstantiateFlagUseNodePriority));
 #else
-  const cudaError_t instantiate_status =
-      cudaGraphInstantiateWithFlags(&graph_exec_,
-                                    graph_,
-                                    cudaGraphInstantiateFlagAutoFreeOnLaunch);
+  AT_CUDA_CHECK(cudaGraphInstantiateWithFlags(&graph_exec_,
+                                              graph_,
+                                              cudaGraphInstantiateFlagAutoFreeOnLaunch));
 #endif
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_graph) {
-    const std::uint64_t api_end =
-        vllm::instrumentation::ReadCoreCycle();
-    vllm::instrumentation::CommitReadCoreCycleSample(
-        kRccGraphSite, kRccInstantiateApi, api_begin, api_end);
-  }
-#endif
-  AT_CUDA_CHECK(instantiate_status);
   has_graph_exec_ = true;
 }
 
@@ -255,7 +205,7 @@ void CUDAGraph::replay() {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const bool record_graph =
       vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
-  const std::uint64_t state_begin =
+  const std::uint64_t total_begin =
       record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   TORCH_CHECK(capture_ended_,
@@ -265,14 +215,6 @@ void CUDAGraph::replay() {
   if (needs_instantiate) {
     TORCH_INTERNAL_ASSERT(keep_graph_);
   }
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_graph) {
-    const std::uint64_t state_end =
-        vllm::instrumentation::ReadCoreCycle();
-    vllm::instrumentation::CommitReadCoreCycleSample(
-        kRccGraphSite, kRccReplayState, state_begin, state_end);
-  }
-#endif
   if (needs_instantiate) {
     instantiate();
   }
@@ -287,31 +229,48 @@ void CUDAGraph::replay() {
        captured_generator_states_) {
     generator_state->replay_prologue(wholegraph_increments);
   }
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const std::uint64_t prologue_end =
+      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+  const std::uint64_t stream_begin =
+      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   // graph_exec_ may be replayed in any stream.
   const auto stream = at::cuda::getCurrentCUDAStream();
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const std::uint64_t stream_end =
+      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+  const std::uint64_t launch_begin =
+      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
+  const cudaError_t launch_status = cudaGraphLaunch(graph_exec_, stream);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const std::uint64_t launch_end =
+      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+  const std::uint64_t tail_begin =
+      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
+  AT_CUDA_CHECK(launch_status);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   if (record_graph) {
-    const std::uint64_t prologue_end =
+    const std::uint64_t tail_end =
         vllm::instrumentation::ReadCoreCycle();
+    const std::uint64_t total_end = tail_end;
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite,
         kRccReplayPrologue,
         prologue_begin,
         prologue_end);
-  }
-  const std::uint64_t api_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
-#endif
-  const cudaError_t launch_status = cudaGraphLaunch(graph_exec_, stream);
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_graph) {
-    const std::uint64_t api_end =
-        vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
-        kRccGraphSite, kRccReplayApi, api_begin, api_end);
+        kRccGraphSite, kRccReplayStream, stream_begin, stream_end);
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccGraphSite, kRccReplayLaunch, launch_begin, launch_end);
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccGraphSite, kRccReplayTail, tail_begin, tail_end);
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccGraphSite, kRccReplayTotal, total_begin, total_end);
   }
 #endif
-  AT_CUDA_CHECK(launch_status);
 }
 
 void CUDAGraph::enable_debug_mode() {
