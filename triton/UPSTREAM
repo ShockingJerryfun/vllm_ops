@@ -1,0 +1,5 @@
+repository=https://github.com/triton-lang/triton.git
+tag=v3.6.0
+commit=7c56a5e40f7fd928dfd5c72902d5def0097db73a
+driver_sha256=4ad4b4440aa4a5ee15ac2382ae78a7aa8029986c22ec2acbd072a91810e85e94
+build_sha256=26c6ddd4dba3534ce54790f12d2b75729f51e467c48b2f740dd62b7c75a85b39
