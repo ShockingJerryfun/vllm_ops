@@ -15,7 +15,7 @@ The timing tool is already designed. These files have exclusive ownership:
 - `csrc/read_core_cycle_recorder.h` exclusively defines the event layout,
   preallocated single-producer buffer, lost counter, and `RecordAfterEnd()`.
 
-PyTorch, vLLM, FlashAttention, Triton generated launchers, and other consumers
+PyTorch, vLLM, FlashAttention, generated-kernel launchers, and other consumers
 must include and use these definitions. Do not copy, rename, wrap, or recreate
 their primitive, selector, event, buffer, or recording logic elsewhere.
 
