@@ -23,6 +23,7 @@
 #include <ATen/native/cuda/ScaledGroupMM.h>
 #include <ATen/native/cuda/GroupMM.h>
 #include <ATen/ceil_div.h>
+#include <read_core_cycle_runtime.h>
 
 #ifdef USE_MSLK
 #include <mslk/gemm/gemm_torch.h>
@@ -92,6 +93,42 @@ c10::MaybeOwned<Tensor> prepare_batch_matrix_for_cublas(const Tensor& tensor, bo
 }
 
 namespace {
+
+constexpr std::uint16_t kRccEagerSite = 700;
+
+enum class RccGemmRole : std::uint16_t {
+  Qkv = 100,
+  AttentionOutput = 110,
+  GateUp = 120,
+  Down = 130,
+  Other = 140,
+};
+
+constexpr std::uint16_t kRccGemmImplementationPrepareOffset = 0;
+
+RccGemmRole rcc_gemm_role(const Tensor& mat1, const Tensor& mat2) {
+  const auto input_width = mat1.size(1);
+  const auto output_width = mat2.size(1);
+  if (input_width == 4096 && output_width == 6144) {
+    return RccGemmRole::Qkv;
+  }
+  if (input_width == 4096 && output_width == 4096) {
+    return RccGemmRole::AttentionOutput;
+  }
+  if (input_width == 4096 && output_width == 24576) {
+    return RccGemmRole::GateUp;
+  }
+  if (input_width == 12288 && output_width == 4096) {
+    return RccGemmRole::Down;
+  }
+  return RccGemmRole::Other;
+}
+
+constexpr std::uint16_t rcc_gemm_stage(
+    RccGemmRole role,
+    std::uint16_t offset) {
+  return static_cast<std::uint16_t>(role) + offset;
+}
 
 enum class Activation {
   None,
@@ -341,6 +378,13 @@ bool launchGemmCublas(
 }
 
 Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& mat1, const Tensor& mat2, const Scalar& beta, const Scalar& alpha, Activation activation=Activation::None, bool disable_addmm_cuda_lt_override=false) {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_gemm =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+  const auto gemm_role = rcc_gemm_role(mat1, mat2);
+  const std::uint64_t implementation_begin =
+      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   // Shape checks {
   // Make sure to keep addmm_cuda below in sync with this code; it
   // preflights a check to try to avoid actually needing to call
@@ -479,6 +523,21 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
         scalar_type,
         "addmm_cuda",
         [&] {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+          if constexpr (std::is_same_v<scalar_t, at::BFloat16>) {
+            if (record_gemm) {
+              const std::uint64_t implementation_end =
+                  vllm::instrumentation::ReadCoreCycle();
+              vllm::instrumentation::CommitReadCoreCycleSample(
+                  kRccEagerSite,
+                  rcc_gemm_stage(
+                      gemm_role,
+                      kRccGemmImplementationPrepareOffset),
+                  implementation_begin,
+                  implementation_end);
+            }
+          }
+#endif
           launchGemmCublas<scalar_t>(args, alpha, beta);
         }
       );

@@ -16,6 +16,7 @@
 #include <c10/util/hash.h>
 #include <c10/util/llvmMathExtras.h>
 #include <c10/util/static_tracepoint.h>
+#include <read_core_cycle_runtime.h>
 
 #if !defined(USE_ROCM) && defined(PYTORCH_C10_DRIVER_API_SUPPORTED)
 #include <c10/cuda/driver_api.h>
@@ -39,6 +40,13 @@
 #include <thread>
 #include <utility>
 #include <vector>
+
+namespace {
+
+constexpr std::uint16_t kRccEagerSite = 700;
+constexpr std::uint16_t kRccDeviceCopySubmitApi = 400;
+
+} // namespace
 
 TORCH_SDT_DEFINE_SEMAPHORE(malloc)
 TORCH_SDT_DEFINE_SEMAPHORE(free)
@@ -4434,7 +4442,26 @@ class NativeCachingAllocator : public CUDAAllocator {
         // memcpy ok because both dst and src must have come from cudaMalloc
         (!device_allocator[dstDevice]->hasAllocatedExpandableSegments() &&
          !device_allocator[srcDevice]->hasAllocatedExpandableSegments())) {
-      return cudaMemcpyAsync(dst, src, count, cudaMemcpyDeviceToDevice, stream);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+      const bool record_copy =
+          vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+      const std::uint64_t submit_begin =
+          record_copy ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
+      const cudaError_t status =
+          cudaMemcpyAsync(dst, src, count, cudaMemcpyDeviceToDevice, stream);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+      if (record_copy) {
+        const std::uint64_t submit_end =
+            vllm::instrumentation::ReadCoreCycle();
+        vllm::instrumentation::CommitReadCoreCycleSample(
+            kRccEagerSite,
+            kRccDeviceCopySubmitApi,
+            submit_begin,
+            submit_end);
+      }
+#endif
+      return status;
     }
     // when p2p is not enabled, only cudaMemcpyPeerAsync correctly handles
     // memory not allocated via cudaMalloc

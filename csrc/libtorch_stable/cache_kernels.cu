@@ -6,6 +6,7 @@
 
 #include "quantization/vectorization_utils.cuh"
 #include "concat_mla_q.cuh"
+#include "read_core_cycle_runtime.h"
 
 #ifdef USE_ROCM
   #include "../quantization/w8a8/fp8/amd/quant_utils.cuh"
@@ -29,6 +30,10 @@ constexpr float kFp8ScaleDivisor = 224.f;
 #else
 constexpr float kFp8ScaleDivisor = 448.f;
 #endif
+
+constexpr std::uint16_t kRccEagerSite = 700;
+constexpr std::uint16_t kRccKvImplementationPrepare = 30;
+constexpr std::uint16_t kRccKvSubmitApi = 31;
 
 void swap_blocks(torch::stable::Tensor& src, torch::stable::Tensor& dst,
                  int64_t block_size_in_bytes,
@@ -730,18 +735,53 @@ void reshape_and_cache(
 // KV_T is the data type of key and value tensors.
 // CACHE_T is the stored data type of kv-cache.
 // KV_DTYPE is the real data type of kv-cache.
-#define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)                \
-  vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>              \
-      <<<grid, block, 0, stream>>>(                                          \
-          reinterpret_cast<KV_T*>(key.data_ptr()),                           \
-          reinterpret_cast<KV_T*>(value.data_ptr()),                         \
-          reinterpret_cast<CACHE_T*>(key_cache.data_ptr()),                  \
-          reinterpret_cast<CACHE_T*>(value_cache.data_ptr()),                \
-          slot_mapping.const_data_ptr<int64_t>(), block_stride, page_stride, \
-          head_stride, key_stride, value_stride, num_heads, head_size,       \
-          block_size, reinterpret_cast<const float*>(k_scale.data_ptr()),    \
-          reinterpret_cast<const float*>(v_scale.data_ptr()),                \
-          kv_scale_stride);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  #define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)               \
+    do {                                                                       \
+      if (record_kv) {                                                         \
+        const std::uint64_t prepare_end =                                      \
+            vllm::instrumentation::ReadCoreCycle();                           \
+        vllm::instrumentation::CommitReadCoreCycleSample(                     \
+            kRccEagerSite,                                                     \
+            kRccKvImplementationPrepare,                                      \
+            prepare_begin,                                                    \
+            prepare_end);                                                     \
+      }                                                                        \
+      const std::uint64_t submit_begin =                                      \
+          record_kv ? vllm::instrumentation::ReadCoreCycle() : 0;             \
+      vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>           \
+          <<<grid, block, 0, stream>>>(                                       \
+              reinterpret_cast<KV_T*>(key.data_ptr()),                        \
+              reinterpret_cast<KV_T*>(value.data_ptr()),                      \
+              reinterpret_cast<CACHE_T*>(key_cache.data_ptr()),               \
+              reinterpret_cast<CACHE_T*>(value_cache.data_ptr()),             \
+              slot_mapping.const_data_ptr<int64_t>(), block_stride,           \
+              page_stride, head_stride, key_stride, value_stride, num_heads,  \
+              head_size, block_size,                                          \
+              reinterpret_cast<const float*>(k_scale.data_ptr()),             \
+              reinterpret_cast<const float*>(v_scale.data_ptr()),             \
+              kv_scale_stride);                                               \
+      if (record_kv) {                                                         \
+        const std::uint64_t submit_end =                                       \
+            vllm::instrumentation::ReadCoreCycle();                           \
+        vllm::instrumentation::CommitReadCoreCycleSample(                     \
+            kRccEagerSite, kRccKvSubmitApi, submit_begin, submit_end);         \
+      }                                                                        \
+    } while (false)
+#else
+  #define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)               \
+    vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>             \
+        <<<grid, block, 0, stream>>>(                                         \
+            reinterpret_cast<KV_T*>(key.data_ptr()),                          \
+            reinterpret_cast<KV_T*>(value.data_ptr()),                        \
+            reinterpret_cast<CACHE_T*>(key_cache.data_ptr()),                 \
+            reinterpret_cast<CACHE_T*>(value_cache.data_ptr()),               \
+            slot_mapping.const_data_ptr<int64_t>(), block_stride, page_stride,\
+            head_stride, key_stride, value_stride, num_heads, head_size,      \
+            block_size, reinterpret_cast<const float*>(k_scale.data_ptr()),   \
+            reinterpret_cast<const float*>(v_scale.data_ptr()),               \
+            kv_scale_stride);
+#endif
 
 void reshape_and_cache_flash(
     torch::stable::Tensor& key,    // [num_tokens, num_heads, head_size]
@@ -754,6 +794,12 @@ void reshape_and_cache_flash(
     const std::string& kv_cache_dtype,
     torch::stable::Tensor& k_scale,    // [1] or [num_heads]
     torch::stable::Tensor& v_scale) {  // [1] or [num_heads]
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_kv =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+  const std::uint64_t prepare_begin =
+      record_kv ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   // NOTE(woosuk): In vLLM V1, key.size(0) can be different from
   // slot_mapping.size(0) because of padding for CUDA graphs.
   // In vLLM V0, key.size(0) is always equal to slot_mapping.size(0) because
@@ -813,6 +859,8 @@ void reshape_and_cache_flash(
   DISPATCH_BY_KV_CACHE_DTYPE(key.scalar_type(), kv_cache_dtype,
                              CALL_RESHAPE_AND_CACHE_FLASH);
 }
+
+#undef CALL_RESHAPE_AND_CACHE_FLASH
 
 // KV_T is the data type of key and value tensors.
 // CACHE_T is the stored data type of kv-cache.

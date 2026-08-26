@@ -6,9 +6,16 @@
 #include "../core/batch_invariant.hpp"
 #include "type_convert.cuh"
 #include "dispatch_utils.h"
+#include "read_core_cycle_runtime.h"
 #include "quantization/vectorization_utils.cuh"
 
 namespace vllm {
+
+constexpr std::uint16_t kRccEagerSite = 700;
+constexpr std::uint16_t kRccRmsNormPrepare = 200;
+constexpr std::uint16_t kRccRmsNormSubmit = 201;
+constexpr std::uint16_t kRccFusedRmsNormPrepare = 210;
+constexpr std::uint16_t kRccFusedRmsNormSubmit = 211;
 
 // TODO(woosuk): Further optimize this kernel.
 template <typename scalar_t, int VEC_SIZE, int NUM_DIMS, bool HasWeight>
@@ -219,6 +226,12 @@ fused_add_rms_norm_kernel(
 void rms_norm(torch::stable::Tensor& out,    // [..., hidden_size]
               torch::stable::Tensor& input,  // [..., hidden_size]
               std::optional<torch::stable::Tensor> weight, double epsilon) {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_rms =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(vllm::kRccEagerSite);
+  const std::uint64_t prepare_begin =
+      record_rms ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   STD_TORCH_CHECK(out.is_contiguous());
   if (input.stride(-1) != 1) {
     input = torch::stable::contiguous(input);
@@ -254,6 +267,19 @@ void rms_norm(torch::stable::Tensor& out,    // [..., hidden_size]
   const torch::stable::accelerator::DeviceGuard device_guard(
       input.get_device_index());
   const cudaStream_t stream = get_current_cuda_stream();
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_rms) {
+    const std::uint64_t prepare_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccEagerSite,
+        vllm::kRccRmsNormPrepare,
+        prepare_begin,
+        prepare_end);
+  }
+  const std::uint64_t submit_begin =
+      record_rms ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   const bool has_weight = weight.has_value();
   VLLM_STABLE_DISPATCH_RANK234(num_dims, [&] {
     VLLM_STABLE_DISPATCH_FLOATING_TYPES(
@@ -285,7 +311,18 @@ void rms_norm(torch::stable::Tensor& out,    // [..., hidden_size]
             }
           });
         });
-  });
+      });
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_rms) {
+    const std::uint64_t submit_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccEagerSite,
+        vllm::kRccRmsNormSubmit,
+        submit_begin,
+        submit_end);
+  }
+#endif
 }
 
 #define LAUNCH_FUSED_ADD_RMS_NORM(width, has_weight)                       \
@@ -311,6 +348,12 @@ void fused_add_rms_norm(torch::stable::Tensor& input,     // [..., hidden_size]
                         torch::stable::Tensor& residual,  // [..., hidden_size]
                         std::optional<torch::stable::Tensor> weight,
                         double epsilon) {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_fused_rms =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(vllm::kRccEagerSite);
+  const std::uint64_t prepare_begin =
+      record_fused_rms ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   STD_TORCH_CHECK(input.scalar_type() == residual.scalar_type());
   STD_TORCH_CHECK(residual.is_contiguous());
   if (weight.has_value()) {
@@ -339,6 +382,19 @@ void fused_add_rms_norm(torch::stable::Tensor& input,     // [..., hidden_size]
       hidden_size % vector_width == 0 && input_stride % vector_width == 0;
   bool batch_invariant_launch = vllm::vllm_is_batch_invariant();
   const bool has_weight = weight.has_value();
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_fused_rms) {
+    const std::uint64_t prepare_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccEagerSite,
+        vllm::kRccFusedRmsNormPrepare,
+        prepare_begin,
+        prepare_end);
+  }
+  const std::uint64_t submit_begin =
+      record_fused_rms ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   if (has_weight) {
     auto wt_ptr = reinterpret_cast<std::uintptr_t>(weight->data_ptr());
     bool ptrs_are_aligned = inp_ptr % req_alignment_bytes == 0 &&
@@ -360,4 +416,15 @@ void fused_add_rms_norm(torch::stable::Tensor& input,     // [..., hidden_size]
       LAUNCH_FUSED_ADD_RMS_NORM(0, false);
     }
   }
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_fused_rms) {
+    const std::uint64_t submit_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccEagerSite,
+        vllm::kRccFusedRmsNormSubmit,
+        submit_begin,
+        submit_end);
+  }
+#endif
 }

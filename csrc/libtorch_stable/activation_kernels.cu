@@ -6,9 +6,14 @@
 #include "../cuda_compat.h"
 #include "cuda_vec_utils.cuh"
 #include "dispatch_utils.h"
+#include "read_core_cycle_runtime.h"
 #include "torch_utils.h"
 
 namespace vllm {
+
+constexpr std::uint16_t kRccEagerSite = 700;
+constexpr std::uint16_t kRccSiluPrepare = 220;
+constexpr std::uint16_t kRccSiluSubmit = 221;
 
 // `alpha` and `beta` are applied to opposite operands:
 //   - alpha lives INSIDE the activation (the activated half): the gated
@@ -227,6 +232,37 @@ packed_gelu_tanh_kernel(const packed_t& val, const float /*alpha*/) {
 
 }  // namespace vllm
 
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  #define RCC_SILU_PREPARE_BEGIN()                                            \
+    const bool record_silu =                                                  \
+        vllm::instrumentation::ReadCoreCycleSiteSelected(                    \
+            vllm::kRccEagerSite);                                            \
+    const std::uint64_t prepare_begin =                                       \
+        record_silu ? vllm::instrumentation::ReadCoreCycle() : 0
+  #define RCC_SILU_SUBMIT_BEGIN()                                             \
+    if (record_silu) {                                                        \
+      const std::uint64_t prepare_end =                                       \
+          vllm::instrumentation::ReadCoreCycle();                             \
+      vllm::instrumentation::CommitReadCoreCycleSample(                       \
+          vllm::kRccEagerSite, vllm::kRccSiluPrepare, prepare_begin,          \
+          prepare_end);                                                       \
+    }                                                                         \
+    const std::uint64_t submit_begin =                                        \
+        record_silu ? vllm::instrumentation::ReadCoreCycle() : 0
+  #define RCC_SILU_SUBMIT_END()                                               \
+    if (record_silu) {                                                        \
+      const std::uint64_t submit_end =                                        \
+          vllm::instrumentation::ReadCoreCycle();                             \
+      vllm::instrumentation::CommitReadCoreCycleSample(                       \
+          vllm::kRccEagerSite, vllm::kRccSiluSubmit, submit_begin,            \
+          submit_end);                                                        \
+    }
+#else
+  #define RCC_SILU_PREPARE_BEGIN()
+  #define RCC_SILU_SUBMIT_BEGIN()
+  #define RCC_SILU_SUBMIT_END()
+#endif
+
 // Launch activation and gating kernel.
 // Use ACT_FIRST (bool) indicating whether to apply the activation function
 // first. HAS_CLAMP (bool) enables pre-activation clamping: gate input is
@@ -240,6 +276,7 @@ packed_gelu_tanh_kernel(const packed_t& val, const float /*alpha*/) {
   if (num_tokens == 0) {                                                       \
     return;                                                                    \
   }                                                                            \
+  RCC_SILU_PREPARE_BEGIN();                                                    \
   dim3 grid(num_tokens);                                                       \
   int cc_major = get_device_prop()->major;                                     \
   int support_vec =                                                            \
@@ -251,6 +288,7 @@ packed_gelu_tanh_kernel(const packed_t& val, const float /*alpha*/) {
   const torch::stable::accelerator::DeviceGuard device_guard(                  \
       input.get_device_index());                                               \
   const cudaStream_t stream = get_current_cuda_stream();                       \
+  RCC_SILU_SUBMIT_BEGIN();                                                     \
   if (use_vec) {                                                               \
     dim3 block(std::min(d / vec_size, 1024));                                  \
     if (CUDA_VERSION >= 12090 && cc_major >= 10 && num_tokens > 128) {         \
@@ -285,7 +323,8 @@ packed_gelu_tanh_kernel(const packed_t& val, const float /*alpha*/) {
           out.mutable_data_ptr<scalar_t>(), input.const_data_ptr<scalar_t>(),  \
           d, LIMIT, ALPHA, BETA);                                              \
     });                                                                        \
-  }
+  }                                                                            \
+  RCC_SILU_SUBMIT_END()
 
 void silu_and_mul(torch::stable::Tensor& out,    // [..., d]
                   torch::stable::Tensor& input)  // [..., 2 * d]
