@@ -734,7 +734,7 @@ def wrap_handle_tensordesc(launcher, signature, tensordesc_meta):
 class CudaLauncher(object):
 
     def __init__(self, src, metadata):
-        rcc_stage_base = _RCC_TRITON_STAGE_BASE.get(src.name.lstrip("@"))
+        rcc_stage_base = _RCC_TRITON_STAGE_BASE.get(metadata.name.lstrip("@"))
         constants = src.constants if hasattr(src, "constants") else dict()
         arg_idx = lambda x: (src.fn.arg_names.index(x), ) if isinstance(x, str) else x
         constants = {arg_idx(idx): value for idx, value in constants.items()}
