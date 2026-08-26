@@ -23,6 +23,7 @@
 #include <ATen/native/cuda/ScaledGroupMM.h>
 #include <ATen/native/cuda/GroupMM.h>
 #include <ATen/ceil_div.h>
+#include <read_core_cycle_runtime.h>
 
 #ifdef USE_MSLK
 #include <mslk/gemm/gemm_torch.h>
@@ -92,6 +93,9 @@ c10::MaybeOwned<Tensor> prepare_batch_matrix_for_cublas(const Tensor& tensor, bo
 }
 
 namespace {
+
+constexpr std::uint16_t kRccGraphSite = 700;
+constexpr std::uint16_t kRccGemmImplementationPrepare = 20;
 
 enum class Activation {
   None,
@@ -341,6 +345,12 @@ bool launchGemmCublas(
 }
 
 Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& mat1, const Tensor& mat2, const Scalar& beta, const Scalar& alpha, Activation activation=Activation::None, bool disable_addmm_cuda_lt_override=false) {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_gemm =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+  const std::uint64_t implementation_begin =
+      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   // Shape checks {
   // Make sure to keep addmm_cuda below in sync with this code; it
   // preflights a check to try to avoid actually needing to call
@@ -479,6 +489,19 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
         scalar_type,
         "addmm_cuda",
         [&] {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+          if constexpr (std::is_same_v<scalar_t, at::BFloat16>) {
+            if (record_gemm) {
+              const std::uint64_t implementation_end =
+                  vllm::instrumentation::ReadCoreCycle();
+              vllm::instrumentation::CommitReadCoreCycleSample(
+                  kRccGraphSite,
+                  kRccGemmImplementationPrepare,
+                  implementation_begin,
+                  implementation_end);
+            }
+          }
+#endif
           launchGemmCublas<scalar_t>(args, alpha, beta);
         }
       );

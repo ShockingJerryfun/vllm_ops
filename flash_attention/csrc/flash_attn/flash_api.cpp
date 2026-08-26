@@ -6,6 +6,7 @@
 #include <torch/nn/functional.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAStream.h>
+#include "read_core_cycle_runtime.h"
 #include <ATen/cuda/CUDAGeneratorImpl.h>  // For at::Generator and at::PhiloxCudaState
 #include "philox_unpack.cuh"  // For at::cuda::philox::unpack
 
@@ -21,6 +22,10 @@
 #define CHECK_CONTIGUOUS(x) TORCH_CHECK(x.is_contiguous(), #x " must be contiguous")
 
 namespace FLASH_NAMESPACE {
+
+constexpr std::uint16_t kRccGraphSite = 700;
+constexpr std::uint16_t kRccFaImplementationPrepare = 40;
+constexpr std::uint16_t kRccFaBackendDispatch = 41;
 
 void set_params_fprop(Flash_fwd_params &params,
                       // sizes
@@ -240,12 +245,40 @@ void set_params_dgrad(Flash_bwd_params &params,
 }
 
 void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+    const bool record_fa =
+        vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+    const std::uint64_t dispatch_begin =
+        record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
     FP16_SWITCH(!params.is_bf16, [&] {
         HEADDIM_SWITCH(params.d, [&] {
             BOOL_SWITCH(params.is_causal, Is_causal, [&] {
                 if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+                    if (record_fa) {
+                        const std::uint64_t dispatch_end =
+                            vllm::instrumentation::ReadCoreCycle();
+                        vllm::instrumentation::CommitReadCoreCycleSample(
+                            kRccGraphSite,
+                            kRccFaBackendDispatch,
+                            dispatch_begin,
+                            dispatch_end);
+                    }
+#endif
                     run_mha_fwd_<elem_type, kHeadDim, Is_causal>(params, stream);
                 } else {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+                    if (record_fa) {
+                        const std::uint64_t dispatch_end =
+                            vllm::instrumentation::ReadCoreCycle();
+                        vllm::instrumentation::CommitReadCoreCycleSample(
+                            kRccGraphSite,
+                            kRccFaBackendDispatch,
+                            dispatch_begin,
+                            dispatch_end);
+                    }
+#endif
                     run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim, Is_causal>(params, stream);
                 }
             });
@@ -536,6 +569,13 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
                int num_splits,
                std::optional<at::Generator> gen_) {
 
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+    const bool record_fa =
+        vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+    const std::uint64_t implementation_begin =
+        record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
+
     // Otherwise the kernel will be launched from cuda:0 device
     at::cuda::CUDAGuard device_guard{q.device()};
 
@@ -745,6 +785,17 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
 
     if (max_seqlen_k > 0) {
         auto stream = at::cuda::getCurrentCUDAStream().stream();
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+        if (record_fa) {
+            const std::uint64_t implementation_end =
+                vllm::instrumentation::ReadCoreCycle();
+            vllm::instrumentation::CommitReadCoreCycleSample(
+                kRccGraphSite,
+                kRccFaImplementationPrepare,
+                implementation_begin,
+                implementation_end);
+        }
+#endif
         run_mha_fwd(params, stream, paged_KV);
     } else {
         // If seqlen_k == 0, then we have an empty tensor. We need to set the output to 0.

@@ -13,6 +13,7 @@
 #include <c10/core/ScalarType.h>
 
 #include <ATen/cuda/detail/BLASConstants.h>
+#include <read_core_cycle_runtime.h>
 
 #ifdef USE_ROCM
 #include <c10/cuda/CUDAStream.h>
@@ -256,6 +257,11 @@ struct CublasLtWorkspace {
 } // anonymous namespace
 
 namespace at::cuda::blas {
+
+constexpr std::uint16_t kRccGraphSite = 700;
+constexpr std::uint16_t kRccGemmBackendDispatch = 21;
+constexpr std::uint16_t kRccGemmLibraryPrepare = 22;
+constexpr std::uint16_t kRccGemmSubmitApi = 23;
 
 /* LEVEL 3 BLAS FUNCTIONS */
 
@@ -1217,6 +1223,12 @@ inline void gemm_internal_cublas_half_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DTYPE(
 
 template <typename C_Dtype>
 inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DTYPE(at::BFloat16, C_Dtype)) {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_gemm =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+  const std::uint64_t prepare_begin =
+      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   cublasHandle_t handle = at::cuda::getCurrentCUDABlasHandle();
   cublasOperation_t opa = _cublasOpFromChar(transa);
   cublasOperation_t opb = _cublasOpFromChar(transb);
@@ -1242,8 +1254,25 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
 #else
   auto compute_type = CUDA_R_32F;
 #endif
-  TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, cublas_flags));
-  TORCH_CUDABLAS_CHECK(cublasGemmEx(
+  const cublasStatus_t math_mode_status =
+      cublasSetMathMode(handle, cublas_flags);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_gemm) {
+    const std::uint64_t prepare_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccGraphSite,
+        kRccGemmLibraryPrepare,
+        prepare_begin,
+        prepare_end);
+  }
+#endif
+  TORCH_CUDABLAS_CHECK(math_mode_status);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const std::uint64_t submit_begin =
+      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
+  const cublasStatus_t gemm_status = cublasGemmEx(
       handle,
       opa,
       opb,
@@ -1262,7 +1291,19 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
       std::is_same_v<C_Dtype, float> ? CUDA_R_32F : CUDA_R_16BF,
       ldc,
       compute_type,
-      CUBLAS_GEMM_DEFAULT_TENSOR_OP));
+      CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_gemm) {
+    const std::uint64_t submit_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccGraphSite,
+        kRccGemmSubmitApi,
+        submit_begin,
+        submit_end);
+  }
+#endif
+  TORCH_CUDABLAS_CHECK(gemm_status);
   TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
 }
 
@@ -1534,11 +1575,28 @@ void gemm<at::Half>(CUDABLAS_GEMM_ARGTYPES(at::Half)) {
 
 template <>
 void gemm<at::BFloat16>(CUDABLAS_GEMM_ARGTYPES(at::BFloat16)) {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_gemm =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+  const std::uint64_t dispatch_begin =
+      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   auto tuning_ctx = at::cuda::tunable::getTuningContext();
   if (tuning_ctx->IsTunableOpEnabled()) {
     gemm_tunable<at::BFloat16>(CUDABLAS_GEMM_ARGS(at::BFloat16));
   }
   else {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+    if (record_gemm) {
+      const std::uint64_t dispatch_end =
+          vllm::instrumentation::ReadCoreCycle();
+      vllm::instrumentation::CommitReadCoreCycleSample(
+          kRccGraphSite,
+          kRccGemmBackendDispatch,
+          dispatch_begin,
+          dispatch_end);
+    }
+#endif
     gemm_internal<at::BFloat16>(CUDABLAS_GEMM_ARGS(at::BFloat16));
   }
 }
