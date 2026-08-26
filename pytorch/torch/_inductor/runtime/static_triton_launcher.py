@@ -12,11 +12,9 @@ from .triton_helpers import get_constexprs
 _RCC_QWEN3_GRAPH_STAGE_BASE = {
     "triton_red_fused__to_copy_embedding_rms_norm_0": 300,
     "triton_red_fused_1": 310,
-    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_2": 320,
-    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_3": 330,
+    "triton_poi_fused_2": 320,
+    "triton_poi_fused_4": 330,
     "triton_red_fused_3": 340,
-    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_4": 350,
-    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_5": 360,
     "triton_red_fused_fused_add_rms_norm_0": 370,
     "triton_poi_fused_mul_silu_slice_1": 380,
     "triton_red_fused_fused_add_rms_norm_2": 390,
