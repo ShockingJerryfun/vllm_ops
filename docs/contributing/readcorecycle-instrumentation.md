@@ -92,12 +92,12 @@ explicit user approval.
 Before any local or server build, inspect the complete source tree:
 
 ```bash
-rg -n 'PMCCNTR_EL0' csrc pytorch flash_attention \
-  --glob '*.{h,hpp,c,cc,cpp,cu,cuh}'
-rg -n 'ReadCoreCycleEvent|ReadCoreCycleRecorder' csrc pytorch flash_attention \
-  --glob '*.{h,hpp,c,cc,cpp,cu,cuh}'
+rg -n 'PMCCNTR_EL0' csrc pytorch flash_attention triton \
+  --glob '*.{h,hpp,c,cc,cpp,cu,cuh,py}'
+rg -n 'ReadCoreCycleEvent|ReadCoreCycleRecorder' csrc pytorch flash_attention triton \
+  --glob '*.{h,hpp,c,cc,cpp,cu,cuh,py}'
 rg -n 'ReadCoreCycleProbe|DirectPmuProbe|OperatorCycleProbe' \
-  csrc pytorch flash_attention --glob '*.{h,hpp,c,cc,cpp,cu,cuh}'
+  csrc pytorch flash_attention triton --glob '*.{h,hpp,c,cc,cpp,cu,cuh,py}'
 rg -n 'perf_counter|perf_counter_ns|time_ns|clock_gettime|CNTVCT|NVTX|cudaEvent' \
   tools/collect_readcorecycle.py
 ```

@@ -95,7 +95,40 @@ c10::MaybeOwned<Tensor> prepare_batch_matrix_for_cublas(const Tensor& tensor, bo
 namespace {
 
 constexpr std::uint16_t kRccGraphSite = 700;
-constexpr std::uint16_t kRccGemmImplementationPrepare = 20;
+
+enum class RccGemmRole : std::uint16_t {
+  Qkv = 100,
+  AttentionOutput = 110,
+  GateUp = 120,
+  Down = 130,
+  Other = 140,
+};
+
+constexpr std::uint16_t kRccGemmImplementationPrepareOffset = 0;
+
+RccGemmRole rcc_gemm_role(const Tensor& mat1, const Tensor& mat2) {
+  const auto input_width = mat1.size(1);
+  const auto output_width = mat2.size(1);
+  if (input_width == 4096 && output_width == 6144) {
+    return RccGemmRole::Qkv;
+  }
+  if (input_width == 4096 && output_width == 4096) {
+    return RccGemmRole::AttentionOutput;
+  }
+  if (input_width == 4096 && output_width == 24576) {
+    return RccGemmRole::GateUp;
+  }
+  if (input_width == 12288 && output_width == 4096) {
+    return RccGemmRole::Down;
+  }
+  return RccGemmRole::Other;
+}
+
+constexpr std::uint16_t rcc_gemm_stage(
+    RccGemmRole role,
+    std::uint16_t offset) {
+  return static_cast<std::uint16_t>(role) + offset;
+}
 
 enum class Activation {
   None,
@@ -348,6 +381,7 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const bool record_gemm =
       vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+  const auto gemm_role = rcc_gemm_role(mat1, mat2);
   const std::uint64_t implementation_begin =
       record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
@@ -496,7 +530,9 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
                   vllm::instrumentation::ReadCoreCycle();
               vllm::instrumentation::CommitReadCoreCycleSample(
                   kRccGraphSite,
-                  kRccGemmImplementationPrepare,
+                  rcc_gemm_stage(
+                      gemm_role,
+                      kRccGemmImplementationPrepareOffset),
                   implementation_begin,
                   implementation_end);
             }

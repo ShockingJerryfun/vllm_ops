@@ -259,9 +259,40 @@ struct CublasLtWorkspace {
 namespace at::cuda::blas {
 
 constexpr std::uint16_t kRccGraphSite = 700;
-constexpr std::uint16_t kRccGemmBackendDispatch = 21;
-constexpr std::uint16_t kRccGemmLibraryPrepare = 22;
-constexpr std::uint16_t kRccGemmSubmitApi = 23;
+
+enum class RccGemmRole : std::uint16_t {
+  Qkv = 100,
+  AttentionOutput = 110,
+  GateUp = 120,
+  Down = 130,
+  Other = 140,
+};
+
+constexpr std::uint16_t kRccGemmBackendDispatchOffset = 1;
+constexpr std::uint16_t kRccGemmLibraryPrepareOffset = 2;
+constexpr std::uint16_t kRccGemmSubmitApiOffset = 3;
+
+constexpr RccGemmRole rcc_gemm_role(int64_t m, int64_t k) {
+  if (m == 6144 && k == 4096) {
+    return RccGemmRole::Qkv;
+  }
+  if (m == 4096 && k == 4096) {
+    return RccGemmRole::AttentionOutput;
+  }
+  if (m == 24576 && k == 4096) {
+    return RccGemmRole::GateUp;
+  }
+  if (m == 4096 && k == 12288) {
+    return RccGemmRole::Down;
+  }
+  return RccGemmRole::Other;
+}
+
+constexpr std::uint16_t rcc_gemm_stage(
+    RccGemmRole role,
+    std::uint16_t offset) {
+  return static_cast<std::uint16_t>(role) + offset;
+}
 
 /* LEVEL 3 BLAS FUNCTIONS */
 
@@ -1226,6 +1257,7 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const bool record_gemm =
       vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+  const auto gemm_role = rcc_gemm_role(m, k);
   const std::uint64_t prepare_begin =
       record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
@@ -1262,7 +1294,7 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite,
-        kRccGemmLibraryPrepare,
+        rcc_gemm_stage(gemm_role, kRccGemmLibraryPrepareOffset),
         prepare_begin,
         prepare_end);
   }
@@ -1298,7 +1330,7 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite,
-        kRccGemmSubmitApi,
+        rcc_gemm_stage(gemm_role, kRccGemmSubmitApiOffset),
         submit_begin,
         submit_end);
   }
@@ -1578,6 +1610,7 @@ void gemm<at::BFloat16>(CUDABLAS_GEMM_ARGTYPES(at::BFloat16)) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const bool record_gemm =
       vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+  const auto gemm_role = rcc_gemm_role(m, k);
   const std::uint64_t dispatch_begin =
       record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
@@ -1592,7 +1625,7 @@ void gemm<at::BFloat16>(CUDABLAS_GEMM_ARGTYPES(at::BFloat16)) {
           vllm::instrumentation::ReadCoreCycle();
       vllm::instrumentation::CommitReadCoreCycleSample(
           kRccGraphSite,
-          kRccGemmBackendDispatch,
+          rcc_gemm_stage(gemm_role, kRccGemmBackendDispatchOffset),
           dispatch_begin,
           dispatch_end);
     }
