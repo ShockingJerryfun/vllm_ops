@@ -168,4 +168,5 @@ Valid phase values are `eager-prefill`, `eager-decode`, `graph-capture-full`,
 128-token input and four generated tokens are a data-quality pilot, not a
 final workload; override `INPUT_TOKENS` and `MAX_TOKENS` only after the pilot
 passes. Never run two stages in one process and never reuse an existing run
-directory.
+directory. Set `RCC_EXPECTED_COUNT` for roles with a fixed census so a missing
+or duplicated occurrence fails the pilot immediately.
