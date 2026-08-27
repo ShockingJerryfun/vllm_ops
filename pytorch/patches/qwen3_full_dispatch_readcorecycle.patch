@@ -10,8 +10,7 @@ index a12af1b..31c232a 100644
    const bool rcc_qwen3_stage_selected =
        detail::rccQwen3DispatcherStageSelected(op.operator_name(), args...);
    const bool rcc_frontend_selected =
-@@ -1015,7 +1014,6 @@ inline Return Dispatcher::redispatch(
- 
+@@ -1016,6 +1015,5 @@ inline Return Dispatcher::redispatch(
  inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
      const {
 -  vllm::instrumentation::CommitPublishedReadCoreCycleFrontend(700);
