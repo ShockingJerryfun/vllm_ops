@@ -89,7 +89,7 @@ def _stage_identity(stage_id: int, occurrence_index: int) -> dict[str, int | str
             2: "total",
             3: "dispatcher",
             4: "return_tail",
-            5: "frontend",
+            5: "full_dispatch",
         }.get(offset, "unknown")
     elif base in {100, 110, 120, 130, 140}:
         offset = stage_id - base
@@ -101,7 +101,7 @@ def _stage_identity(stage_id: int, occurrence_index: int) -> dict[str, int | str
             4: "total",
             5: "dispatcher",
             6: "return_tail",
-            7: "frontend",
+            7: "full_dispatch",
         }.get(offset, "unknown")
     elif base == 40:
         stage_group = {
@@ -113,7 +113,7 @@ def _stage_identity(stage_id: int, occurrence_index: int) -> dict[str, int | str
             5: "total",
             6: "dispatcher",
             7: "return_tail",
-            8: "frontend",
+            8: "full_dispatch",
             9: "submit_group",
         }.get(stage_id - base, "unknown")
     elif stage_id in {50, 51, 52, 53, 54}:

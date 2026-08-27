@@ -8,6 +8,9 @@ namespace vllm::instrumentation {
 
 extern thread_local std::uint32_t read_core_cycle_frontend_depth;
 
+[[gnu::always_inline]] inline void CommitPublishedReadCoreCycleFrontend(
+    std::uint16_t site_id) noexcept;
+
 class ReadCoreCycleFrontendChainGuard final {
  public:
   explicit ReadCoreCycleFrontendChainGuard(bool selected) noexcept
@@ -15,6 +18,9 @@ class ReadCoreCycleFrontendChainGuard final {
 
   ~ReadCoreCycleFrontendChainGuard() {
     if (selected_ && read_core_cycle_frontend_depth != 0) {
+      if (read_core_cycle_frontend_depth == 1) {
+        CommitPublishedReadCoreCycleFrontend(700);
+      }
       --read_core_cycle_frontend_depth;
     }
   }
