@@ -70,7 +70,12 @@ from triton.runtime import build as triton_build  # noqa: E402
 
 import vllm  # noqa: E402
 from vllm import LLM, SamplingParams  # noqa: E402
-from vllm.v1.worker.gpu_model_runner import GPUModelRunner  # noqa: E402
+from vllm.v1.worker.gpu.model_runner import (  # noqa: E402
+    GPUModelRunner as GPUModelRunnerV2,
+)
+from vllm.v1.worker.gpu_model_runner import (  # noqa: E402
+    GPUModelRunner as GPUModelRunnerV1,
+)
 
 result: dict[str, Any] = {
     "site_id": 700,
@@ -89,8 +94,6 @@ result: dict[str, Any] = {
 active = False
 armed = False
 execute_index = 0
-original_execute_model = GPUModelRunner.execute_model
-original_capture_model = GPUModelRunner.capture_model
 
 
 def _start() -> None:
@@ -107,14 +110,8 @@ def _stop() -> None:
     active = False
 
 
-def measured_execute_model(
-    self: GPUModelRunner, scheduler_output: Any, intermediate_tensors: Any = None
-) -> Any:
-    global execute_index
-    current_index = execute_index
-    if armed:
-        execute_index += 1
-    selected = armed and (
+def _selected_execute_index(current_index: int) -> bool:
+    return armed and (
         (phase in {"eager-prefill", "graph-prefill"} and current_index == 0)
         or (
             phase in {"eager-decode", "graph-replay"}
@@ -122,29 +119,43 @@ def measured_execute_model(
         )
         or (phase == "graph-outside" and current_index == target_step)
     )
-    if selected:
+
+
+def _patch_model_runner(model_runner_class: type[Any]) -> None:
+    original_execute_model = model_runner_class.execute_model
+    original_capture_model = model_runner_class.capture_model
+
+    def measured_execute_model(self: Any, *args: Any, **kwargs: Any) -> Any:
+        global execute_index
+        current_index = execute_index
+        if armed:
+            execute_index += 1
+        selected = _selected_execute_index(current_index)
+        if selected:
+            _start()
+        try:
+            return original_execute_model(self, *args, **kwargs)
+        finally:
+            if selected and active:
+                _stop()
+
+    def measured_capture_model(self: Any, *args: Any, **kwargs: Any) -> Any:
+        if "start" in result:
+            raise RuntimeError("GPUModelRunner.capture_model called more than once")
         _start()
-    try:
-        return original_execute_model(self, scheduler_output, intermediate_tensors)
-    finally:
-        if selected and active:
-            _stop()
+        try:
+            return original_capture_model(self, *args, **kwargs)
+        finally:
+            if active:
+                _stop()
+
+    model_runner_class.execute_model = measured_execute_model
+    if is_capture:
+        model_runner_class.capture_model = measured_capture_model
 
 
-def measured_capture_model(self: GPUModelRunner) -> Any:
-    if "start" in result:
-        raise RuntimeError("GPUModelRunner.capture_model called more than once")
-    _start()
-    try:
-        return original_capture_model(self)
-    finally:
-        if active:
-            _stop()
-
-
-GPUModelRunner.execute_model = measured_execute_model
-if is_capture:
-    GPUModelRunner.capture_model = measured_capture_model
+_patch_model_runner(GPUModelRunnerV1)
+_patch_model_runner(GPUModelRunnerV2)
 
 try:
     build_source = Path(triton_build.__file__).read_text(encoding="utf-8")
