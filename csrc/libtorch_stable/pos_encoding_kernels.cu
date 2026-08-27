@@ -2,8 +2,13 @@
 
 #include "../cuda_compat.h"
 #include "dispatch_utils.h"
+#include "read_core_cycle_runtime.h"
 
 namespace vllm {
+
+constexpr std::uint16_t kRccGraphSite = 700;
+constexpr std::uint16_t kRccRopePrepare = 230;
+constexpr std::uint16_t kRccRopeSubmit = 231;
 
 template <typename scalar_t, typename cache_t, bool IS_NEOX>
 inline __device__ void apply_token_rotary_embedding(
@@ -116,6 +121,12 @@ void rotary_embedding(
     int64_t head_size,
     torch::stable::Tensor& cos_sin_cache,  // [max_position, rot_dim]
     bool is_neox, int64_t rope_dim_offset, bool inverse) {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_rope =
+      vllm::instrumentation::ReadCoreCycleSiteSelected(vllm::kRccGraphSite);
+  const std::uint64_t prepare_begin =
+      record_rope ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   // num_tokens = batch_size * seq_len
   int64_t num_tokens = positions.numel();
   int positions_ndim = positions.dim();
@@ -169,6 +180,19 @@ void rotary_embedding(
   const torch::stable::accelerator::DeviceGuard device_guard(
       query.get_device_index());
   const cudaStream_t stream = get_current_cuda_stream();
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_rope) {
+    const std::uint64_t prepare_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccGraphSite,
+        vllm::kRccRopePrepare,
+        prepare_begin,
+        prepare_end);
+  }
+  const std::uint64_t submit_begin =
+      record_rope ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   VLLM_STABLE_DISPATCH_FLOATING_TYPES(
       query.scalar_type(), "rotary_embedding", [&] {
         using query_t = scalar_t;
@@ -198,4 +222,15 @@ void rotary_embedding(
               }
             });
       });
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_rope) {
+    const std::uint64_t submit_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccGraphSite,
+        vllm::kRccRopeSubmit,
+        submit_begin,
+        submit_end);
+  }
+#endif
 }
