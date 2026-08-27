@@ -18,6 +18,16 @@ def test_qwen3_norm_occurrences_map_to_semantic_roles() -> None:
     assert _stage_identity(212, 71)["operator_role"] == "final_norm"
 
 
+def test_auxiliary_copy_and_generated_total_have_fixed_identity() -> None:
+    assert _stage_identity(402, 4) == {
+        "operator_role": "auxiliary_device_copy",
+        "layer_idx": -1,
+        "occurrence_idx": 4,
+        "stage_group": "total",
+    }
+    assert _stage_identity(582, 0)["stage_group"] == "total"
+
+
 def test_summarize_raw_keeps_each_occurrence_and_adds_identity(tmp_path) -> None:
     raw_path = tmp_path / "raw.csv"
     summary_path = tmp_path / "summary.json"
