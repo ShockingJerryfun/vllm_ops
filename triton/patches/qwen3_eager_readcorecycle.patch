@@ -1,0 +1,224 @@
+diff --git a/python/triton/runtime/build.py b/python/triton/runtime/build.py
+index 786f51e54..38c5821ac 100644
+--- a/python/triton/runtime/build.py
++++ b/python/triton/runtime/build.py
+@@ -18,19 +18,22 @@ from .. import knobs
+ 
+ 
+ def _build(name: str, src: str, srcdir: str, library_dirs: list[str], include_dirs: list[str], libraries: list[str],
+-           ccflags: list[str]) -> str:
++           ccflags: list[str], source_language: str) -> str:
+     if impl := knobs.build.impl:
+         return impl(name, src, srcdir, library_dirs, include_dirs, libraries)
+     suffix = sysconfig.get_config_var('EXT_SUFFIX')
+     so = os.path.join(srcdir, '{name}{suffix}'.format(name=name, suffix=suffix))
+-    cc = os.environ.get("CC")
++    is_cpp = source_language == "c++"
++    cc = os.environ.get("CXX" if is_cpp else "CC")
+     if cc is None:
+-        clang = shutil.which("clang")
+-        gcc = shutil.which("gcc")
++        clang = shutil.which("clang++" if is_cpp else "clang")
++        gcc = shutil.which("g++" if is_cpp else "gcc")
+         cc = gcc if gcc is not None else clang
+         if cc is None:
+             raise RuntimeError(
+-                "Failed to find C compiler. Please specify via CC environment variable or set triton.knobs.build.impl.")
++                f"Failed to find {'C++' if is_cpp else 'C'} compiler. "
++                "Please specify via "
++                f"{'CXX' if is_cpp else 'CC'} or set triton.knobs.build.impl.")
+     scheme = sysconfig.get_default_scheme()
+     # 'posix_local' is a custom scheme on Debian. However, starting Python 3.10, the default install
+     # path changes to include 'local'. This change is required to use triton with system-wide python.
+@@ -71,10 +74,19 @@ def _load_module_from_path(name: str, path: str) -> ModuleType:
+     return mod
+ 
+ 
+-def compile_module_from_src(src: str, name: str, library_dirs: list[str] | None = None,
+-                            include_dirs: list[str] | None = None, libraries: list[str] | None = None,
+-                            ccflags: list[str] | None = None) -> ModuleType:
+-    key = hashlib.sha256((src + platform_key()).encode("utf-8")).hexdigest()
++def compile_module_from_src(
++    src: str,
++    name: str,
++    library_dirs: list[str] | None = None,
++    include_dirs: list[str] | None = None,
++    libraries: list[str] | None = None,
++    ccflags: list[str] | None = None,
++    source_language: str = "c",
++) -> ModuleType:
++    if source_language not in ("c", "c++"):
++        raise ValueError(f"Unsupported source language: {source_language}")
++    build_key = repr((library_dirs, include_dirs, libraries, ccflags, source_language))
++    key = hashlib.sha256((src + build_key + platform_key()).encode("utf-8")).hexdigest()
+     cache = get_cache_manager(key)
+     suffix = sysconfig.get_config_var("EXT_SUFFIX")
+     cache_path = cache.get_file(f"{name}{suffix}")
+@@ -87,10 +99,20 @@ def compile_module_from_src(src: str, name: str, library_dirs: list[str] | None
+             log.warning(f"Triton cache error: compiled module {name}.so could not be loaded")
+ 
+     with tempfile.TemporaryDirectory() as tmpdir:
+-        src_path = os.path.join(tmpdir, name + ".c")
++        source_suffix = ".cpp" if source_language == "c++" else ".c"
++        src_path = os.path.join(tmpdir, name + source_suffix)
+         with open(src_path, "w") as f:
+             f.write(src)
+-        so = _build(name, src_path, tmpdir, library_dirs or [], include_dirs or [], libraries or [], ccflags or [])
++        so = _build(
++            name,
++            src_path,
++            tmpdir,
++            library_dirs or [],
++            include_dirs or [],
++            libraries or [],
++            ccflags or [],
++            source_language,
++        )
+         with open(so, "rb") as f:
+             cache_path = cache.put(f.read(), f"{name}{suffix}", binary=True)
+ 
+diff --git a/third_party/nvidia/backend/driver.py b/third_party/nvidia/backend/driver.py
+index 5a2ddb378..ac820a7d7 100644
+--- a/third_party/nvidia/backend/driver.py
++++ b/third_party/nvidia/backend/driver.py
+@@ -16,6 +16,19 @@ libdevice_dir = os.path.join(dirname, "lib")
+ libraries = ['libcuda.so.1']
+ PyCUtensorMap = None
+ 
++_RCC_EAGER_SITE = 700
++_RCC_QWEN3_EAGER_STAGE_BASE = {
++    "_combine_sampled_and_draft_tokens_kernel": 500,
++    "_compute_slot_mappings_kernel": 510,
++    "_gather_block_tables_kernel": 520,
++    "_prepare_pos_seq_lens_kernel": 530,
++    "_prepare_prefill_inputs_kernel": 540,
++    "_apply_write_kernel": 550,
++    "_gumbel_sample_kernel": 560,
++    "_get_num_sampled_and_rejected_kernel": 570,
++    "_post_update_kernel": 580,
++}
++
+ 
+ @functools.lru_cache()
+ def libcuda_dirs():
+@@ -124,7 +137,7 @@ _BASE_ARGS_FORMAT = "iiiKKppOOOOOO"
+ _BASE_ARGS_FORMAT_LEN = len(_BASE_ARGS_FORMAT)
+ 
+ 
+-def make_launcher(constants, signature, tensordesc_meta):
++def make_launcher(constants, signature, tensordesc_meta, rcc_stage_base=None):
+ 
+     def _expand_signature(signature):
+         output = []
+@@ -260,17 +273,53 @@ def make_launcher(constants, signature, tensordesc_meta):
+     params = [f"&arg{i}" for i, ty in signature.items() if ty != "constexpr"]
+     params.append("&global_scratch")
+     params.append("&profile_scratch")
++    rcc_include = (
++        '#include "read_core_cycle_runtime.h"'
++        if rcc_stage_base is not None
++        else ""
++    )
++    rcc_constants = "" if rcc_stage_base is None else f"""
++constexpr std::uint16_t kRccEagerSite = {_RCC_EAGER_SITE};
++constexpr std::uint16_t kRccTritonPrepare = {rcc_stage_base};
++constexpr std::uint16_t kRccTritonSubmit = {rcc_stage_base + 1};
++"""
++    rcc_prepare_begin = "" if rcc_stage_base is None else """
++    const bool record_rcc =
++        vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
++    const std::uint64_t prepare_begin =
++        record_rcc ? vllm::instrumentation::ReadCoreCycle() : 0;
++"""
++    rcc_submit_boundary = "" if rcc_stage_base is None else """
++    const std::uint64_t prepare_end =
++        record_rcc ? vllm::instrumentation::ReadCoreCycle() : 0;
++    const std::uint64_t submit_begin =
++        record_rcc ? vllm::instrumentation::ReadCoreCycle() : 0;
++"""
++    rcc_submit_end = "" if rcc_stage_base is None else """
++    if (record_rcc) {
++      const std::uint64_t submit_end =
++          vllm::instrumentation::ReadCoreCycle();
++      vllm::instrumentation::CommitReadCoreCycleSample(
++          kRccEagerSite, kRccTritonPrepare, prepare_begin, prepare_end);
++      vllm::instrumentation::CommitReadCoreCycleSample(
++          kRccEagerSite, kRccTritonSubmit, submit_begin, submit_end);
++    }
++"""
++    alignment = "alignas" if rcc_stage_base is not None else "_Alignas"
+     src = f"""
+ #include \"cuda.h\"
+ #include <dlfcn.h>
+ #include <stdbool.h>
+ #include <stdlib.h>
++{rcc_include}
+ #define PY_SSIZE_T_CLEAN
+ #include <Python.h>
+ 
++{rcc_constants}
++
+ typedef struct {{
+   PyObject_HEAD;
+-  _Alignas(128) CUtensorMap tensorMap;
++  {alignment}(128) CUtensorMap tensorMap;
+ }} PyCUtensorMapObject;
+ 
+ static inline void gpuAssert(CUresult code, const char *file, int line)
+@@ -322,6 +371,7 @@ static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas
+     if (cuLaunchKernelExHandle == NULL) {{
+       cuLaunchKernelExHandle = getLaunchKernelExHandle();
+     }}
++    {rcc_prepare_begin}
+     CUlaunchConfig config;
+     config.gridDimX = gridX * num_ctas;
+     config.gridDimY = gridY;
+@@ -373,7 +423,9 @@ static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas
+       ));
+     }}
+ 
++    {rcc_submit_boundary}
+     CUDA_CHECK(cuLaunchKernelExHandle(&config, function, params, 0));
++    {rcc_submit_end}
+   }}
+ }}
+ 
+@@ -674,18 +726,34 @@ def wrap_handle_tensordesc(launcher, signature, tensordesc_meta):
+ class CudaLauncher(object):
+ 
+     def __init__(self, src, metadata):
++        rcc_stage_base = _RCC_QWEN3_EAGER_STAGE_BASE.get(src.name.lstrip("@"))
+         constants = src.constants if hasattr(src, "constants") else dict()
+         arg_idx = lambda x: (src.fn.arg_names.index(x), ) if isinstance(x, str) else x
+         constants = {arg_idx(idx): value for idx, value in constants.items()}
+         signature = {idx: value for idx, value in src.signature.items()}
+         tensordesc_meta = getattr(metadata, "tensordesc_meta", None)
+-        src = make_launcher(constants, signature, tensordesc_meta)
++        src = make_launcher(constants, signature, tensordesc_meta, rcc_stage_base)
++        launcher_library_dirs = library_dirs()
++        launcher_include_dirs = include_dirs
++        launcher_libraries = libraries
++        launcher_ccflags = []
++        source_language = "c"
++        if rcc_stage_base is not None:
++            runtime_path = Path(os.environ["VLLM_RCC_RUNTIME"]).resolve(strict=True)
++            include_path = Path(os.environ["VLLM_RCC_INCLUDE_DIR"]).resolve(strict=True)
++            launcher_library_dirs = [*launcher_library_dirs, str(runtime_path.parent)]
++            launcher_include_dirs = [*launcher_include_dirs, str(include_path)]
++            launcher_libraries = [*launcher_libraries, runtime_path.name]
++            launcher_ccflags = ["-std=gnu++20", f"-Wl,-rpath,{runtime_path.parent}"]
++            source_language = "c++"
+         mod = compile_module_from_src(
+             src=src,
+             name="__triton_launcher",
+-            library_dirs=library_dirs(),
+-            include_dirs=include_dirs,
+-            libraries=libraries,
++            library_dirs=launcher_library_dirs,
++            include_dirs=launcher_include_dirs,
++            libraries=launcher_libraries,
++            ccflags=launcher_ccflags,
++            source_language=source_language,
+         )
+ 
+         self.num_ctas = getattr(metadata, "num_ctas", 1)

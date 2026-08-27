@@ -41,6 +41,7 @@
 #include <c10/util/irange.h>
 #include <c10/core/QScheme.h>
 #include <ATen/native/quantized/AffineQuantizerBase.h>
+#include <read_core_cycle_runtime.h>
 
 #include <limits>
 
@@ -55,6 +56,12 @@ constexpr uint64_t getDefaultMaxThreadsPerBlock() {
   return 512;
 #endif
 }
+
+constexpr std::uint16_t kRccEagerSite = 700;
+constexpr std::uint16_t kRccEmbeddingIndexSelectPrepare = 250;
+constexpr std::uint16_t kRccEmbeddingIndexSelectSubmit = 251;
+constexpr int64_t kQwen3VocabSize = 151936;
+constexpr int64_t kQwen3HiddenSize = 4096;
 
 #ifdef USE_ROCM
 #define SKIP_SORTED_INDICES 32
@@ -1561,6 +1568,16 @@ void index_select_out_cuda_impl(
   uint64_t numIndices = index.numel();
   auto selfDims = self.dim() == 0 ? 1 : self.dim();
 
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  const bool record_embedding =
+      dim == 0 && numIndices == 1 && self.dim() == 2 &&
+      self.size(0) == kQwen3VocabSize &&
+      self.size(1) == kQwen3HiddenSize &&
+      self.scalar_type() == at::kBFloat16 &&
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+  const std::uint64_t prepare_begin =
+      record_embedding ? vllm::instrumentation::ReadCoreCycle() : 0;
+#endif
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
   TORCH_CHECK(
@@ -1597,13 +1614,55 @@ void index_select_out_cuda_impl(
 
   int mpc = at::cuda::getCurrentDeviceProperties()->multiProcessorCount;
 
-#define SMALL_INDEX(TENSOR_TYPE, INDICES_TYPE, TYPE, DST_DIM, SRC_DIM, IDX_DIM)         \
-  indexSelectSmallIndex<TENSOR_TYPE, INDICES_TYPE, TYPE, DST_DIM, SRC_DIM, IDX_DIM>     \
-    <<<smallIndexGrid, smallIndexBlock, 0, stream>>>(                                   \
-      outInfo, selfInfo, indicesInfo,                                                   \
-      outSelectDim, selfSelectDim, static_cast<TYPE>(sliceSize),                        \
-      selfSelectDimSize);                                                               \
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+#define SMALL_INDEX(TENSOR_TYPE, INDICES_TYPE, TYPE, DST_DIM, SRC_DIM, IDX_DIM)     \
+  do {                                                                              \
+    if (record_embedding) {                                                         \
+      const std::uint64_t prepare_end =                                             \
+          vllm::instrumentation::ReadCoreCycle();                                   \
+      vllm::instrumentation::CommitReadCoreCycleSample(                             \
+          kRccEagerSite,                                                            \
+          kRccEmbeddingIndexSelectPrepare,                                          \
+          prepare_begin,                                                            \
+          prepare_end);                                                             \
+    }                                                                               \
+    const std::uint64_t submit_begin =                                              \
+        record_embedding ? vllm::instrumentation::ReadCoreCycle() : 0;             \
+    indexSelectSmallIndex<                                                          \
+        TENSOR_TYPE, INDICES_TYPE, TYPE, DST_DIM, SRC_DIM, IDX_DIM>                 \
+        <<<smallIndexGrid, smallIndexBlock, 0, stream>>>(                           \
+            outInfo,                                                               \
+            selfInfo,                                                              \
+            indicesInfo,                                                           \
+            outSelectDim,                                                          \
+            selfSelectDim,                                                         \
+            static_cast<TYPE>(sliceSize),                                          \
+            selfSelectDimSize);                                                    \
+    C10_CUDA_KERNEL_LAUNCH_CHECK();                                                \
+    if (record_embedding) {                                                        \
+      const std::uint64_t submit_end =                                             \
+          vllm::instrumentation::ReadCoreCycle();                                  \
+      vllm::instrumentation::CommitReadCoreCycleSample(                            \
+          kRccEagerSite,                                                           \
+          kRccEmbeddingIndexSelectSubmit,                                          \
+          submit_begin,                                                            \
+          submit_end);                                                             \
+    }                                                                              \
+  } while (false)
+#else
+#define SMALL_INDEX(TENSOR_TYPE, INDICES_TYPE, TYPE, DST_DIM, SRC_DIM, IDX_DIM)  \
+  indexSelectSmallIndex<                                                           \
+      TENSOR_TYPE, INDICES_TYPE, TYPE, DST_DIM, SRC_DIM, IDX_DIM>                  \
+      <<<smallIndexGrid, smallIndexBlock, 0, stream>>>(                            \
+          outInfo,                                                                \
+          selfInfo,                                                               \
+          indicesInfo,                                                            \
+          outSelectDim,                                                           \
+          selfSelectDim,                                                          \
+          static_cast<TYPE>(sliceSize),                                           \
+          selfSelectDimSize);                                                     \
+  C10_CUDA_KERNEL_LAUNCH_CHECK()
+#endif
 
   uint64_t defaultMaxBlockThreads = getDefaultMaxThreadsPerBlock();
   dim3 smallIndexGrid(std::min(ceil_div(sliceSize, defaultMaxBlockThreads), (uint64_t) (mpc * 8)));
