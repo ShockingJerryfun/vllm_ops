@@ -62,25 +62,19 @@ def _stage_identity(stage_id: int, occurrence_index: int) -> dict[str, int | str
 
     if 200 <= stage_id < 210:
         base = 200
-        if occurrence_index == 0:
-            role = "input_layernorm"
-            layer_index = 0
-        elif occurrence_index % 2 == 1:
+        if occurrence_index == 72:
+            role = "final_norm"
+        elif occurrence_index % 2 == 0:
             role = "q_norm"
-            layer_index = (occurrence_index - 1) // 2
+            layer_index = occurrence_index // 2
         else:
             role = "k_norm"
-            layer_index = (occurrence_index - 2) // 2
+            layer_index = occurrence_index // 2
     elif 210 <= stage_id < 220:
         base = 210
-        if occurrence_index == 0:
-            role = "post_attention_layernorm"
-            layer_index = 0
-        elif occurrence_index == 71:
-            role = "final_norm"
-        elif occurrence_index % 2 == 1:
+        if occurrence_index % 2 == 0:
             role = "input_layernorm"
-            layer_index = (occurrence_index + 1) // 2
+            layer_index = occurrence_index // 2
         else:
             role = "post_attention_layernorm"
             layer_index = occurrence_index // 2
