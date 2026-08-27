@@ -64,13 +64,13 @@ The ABI v2 stage layout for direct paths is fixed as follows:
 
 - two-stage launchers use `base+0=prepare`, `base+1=submit`,
   `base+2=independent total`, `base+3=Dispatcher`, `base+4=return tail`,
-  and `base+5=frontend`; bases are KV 30, RMSNorm 200, fused RMSNorm 210,
+  and `base+5=full dispatch`; bases are KV 30, RMSNorm 200, fused RMSNorm 210,
   SiLU 220, RoPE 230, embedding gather 240, and index-select 250;
 - GEMM roles retain their four proven internal stages at bases 100, 110, 120,
   130, and 140, then use `base+4=independent total`, `base+5=Dispatcher`,
-  `base+6=return tail`, and `base+7=frontend`;
+  `base+6=return tail`, and `base+7=full dispatch`;
 - FlashAttention retains stages 40-44, then uses 45 total, 46 Dispatcher,
-  47 return tail, 48 frontend, and 49 the full multi-launch submit group;
+  47 return tail, 48 full dispatch, and 49 the full multi-launch submit group;
 - generated Triton launchers use `base+0=prepare`, `base+1=submit`, and
   `base+2=independent total`; fixed bases 300 through 390 in steps of ten map
   the ten trace-confirmed Qwen3 compiled groups: first-layer embedding/norm,
@@ -83,8 +83,10 @@ The ABI v2 stage layout for direct paths is fixed as follows:
 - FULL Graph Replay remains 50 total, 51 prologue, 52 stream lookup,
   53 `cudaGraphLaunch` Host submission, and 54 return tail.
 
-Frontend and return-tail spans cross function boundaries through fields in the
-single thread-local selection object. They never create another recorder or
+Full-dispatch and return-tail spans cross function boundaries through fields in
+the single thread-local selection object. Full dispatch begins at the public
+operator handle and ends after the implementation returns to Dispatcher; it
+does not synchronize the device. These spans never create another recorder or
 event format. The collector requires a phase label for each derived artifact
 and adds deterministic occurrence, semantic-role, layer, and stage-group
 columns without altering raw CSV evidence.

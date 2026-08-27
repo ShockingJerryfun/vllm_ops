@@ -47,6 +47,12 @@ def test_graph_compiled_launchers_keep_fusion_role_and_layer() -> None:
     }
 
 
+def test_public_operator_stage_is_full_dispatch() -> None:
+    assert _stage_identity(205, 0)["stage_group"] == "full_dispatch"
+    assert _stage_identity(107, 0)["stage_group"] == "full_dispatch"
+    assert _stage_identity(48, 0)["stage_group"] == "full_dispatch"
+
+
 def test_summarize_raw_keeps_each_occurrence_and_adds_identity(tmp_path) -> None:
     raw_path = tmp_path / "raw.csv"
     summary_path = tmp_path / "summary.json"

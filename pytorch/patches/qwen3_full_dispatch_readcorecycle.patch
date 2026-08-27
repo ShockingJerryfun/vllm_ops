@@ -1,0 +1,19 @@
+diff --git a/aten/src/ATen/core/dispatch/Dispatcher.h b/aten/src/ATen/core/dispatch/Dispatcher.h
+index a12af1b..31c232a 100644
+--- a/aten/src/ATen/core/dispatch/Dispatcher.h
++++ b/aten/src/ATen/core/dispatch/Dispatcher.h
+@@ -910,7 +910,6 @@ template <class Return, class... Args>
+ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
+     const TypedOperatorHandle<Return(Args...)>& op,
+     Args... args) const {
+-  vllm::instrumentation::CommitPublishedReadCoreCycleFrontend(700);
+   const bool rcc_qwen3_stage_selected =
+       detail::rccQwen3DispatcherStageSelected(op.operator_name(), args...);
+   const bool rcc_frontend_selected =
+@@ -1016,6 +1015,5 @@ inline Return Dispatcher::redispatch(
+ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
+     const {
+-  vllm::instrumentation::CommitPublishedReadCoreCycleFrontend(700);
+   const bool rcc_qwen3_stage_selected =
+       detail::rccQwen3DispatcherStageSelected(op.operator_name(), stack);
+   const bool rcc_frontend_selected =
