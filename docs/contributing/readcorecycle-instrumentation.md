@@ -72,10 +72,10 @@ The ABI v2 stage layout for direct paths is fixed as follows:
 - FlashAttention retains stages 40-44, then uses 45 total, 46 Dispatcher,
   47 return tail, 48 frontend, and 49 the full multi-launch submit group;
 - generated Triton launchers use `base+0=prepare`, `base+1=submit`, and
-  `base+2=independent total`; fixed bases are embedding 300, qkv 310,
-  q/k norm 320, RoPE 330, attention 340, o projection 370, gate/up 380,
-  and down projection 390, while dynamically classified Graph-external
-  launchers use 500 through 580;
+  `base+2=independent total`; fixed bases 300, 310, 320, 330, 340, 370,
+  380, and 390 map by exact generated launcher name to the embedding/norm,
+  Q/K-Norm/RoPE, residual/RMSNorm, and SiLU groups, while dynamically
+  classified Graph-external launchers use 500 through 580;
 - auxiliary device copy uses base 400 with the same six-stage layout as the
   other two-stage launchers;
 - FULL Graph Replay remains 50 total, 51 prologue, 52 stream lookup,
@@ -163,8 +163,8 @@ RCC_MODE=eager RCC_PHASE=eager-prefill RCC_STAGE_ID=202 \
 ```
 
 Valid phase values are `eager-prefill`, `eager-decode`, `graph-capture-full`,
-`graph-capture-piecewise`, `graph-prefill`, and `graph-replay`. Use
-`graph-outside` is also valid; there, step zero selects prefill and step one
+`graph-capture-piecewise`, `graph-prefill`, `graph-replay`, and
+`graph-outside`. For `graph-outside`, step zero selects prefill and step one
 selects the first decode execution. Use `RCC_TARGET_STEP=0` for the first
 selected decode/replay step. The default
 128-token input and four generated tokens are a data-quality pilot, not a
