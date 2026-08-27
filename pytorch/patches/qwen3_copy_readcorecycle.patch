@@ -2,28 +2,27 @@ diff --git a/aten/src/ATen/native/cuda/Copy.cu b/aten/src/ATen/native/cuda/Copy.
 index 86d6c0ed1..333333333 100644
 --- a/aten/src/ATen/native/cuda/Copy.cu
 +++ b/aten/src/ATen/native/cuda/Copy.cu
-@@ -12,6 +12,7 @@
+@@ -9,6 +9,7 @@
+ #include <ATen/native/Copy.h>
+ #include <ATen/native/TensorIterator.h>
  #include <ATen/native/cuda/Loops.cuh>
- #include <ATen/native/cuda/MemoryAccess.cuh>
- #include <ATen/native/cuda/KernelUtils.cuh>
 +#include <read_core_cycle_runtime.h>
  
- #include <c10/cuda/CUDACachingAllocator.h>
- #include <c10/cuda/CUDAEvent.h>
-@@ -32,6 +33,13 @@ namespace at::native {
+ #ifndef AT_PER_OPERATOR_HEADERS
+ #include <ATen/Functions.h>
+@@ -28,7 +29,12 @@ namespace at::native {
+ namespace {
  
- using namespace at::cuda;
- 
-+namespace {
+ // Initial pool size for CUDA events per device.
+ constexpr size_t kInitialEventPoolSize = 8;
++
 +constexpr std::uint16_t kRccQwen3Site = 700;
 +constexpr std::uint16_t kRccCopyPrepare = 400;
 +constexpr std::uint16_t kRccCopyTotal = 402;
 +constexpr std::uint16_t kRccCopyTail = 404;
-+} // namespace
-+
- void launch_unrolled_elementwise_kernel(
-     int64_t N,
-     const TensorIteratorBase& iter,
+ 
+ at::cuda::CUDAEventPool::Event getEventFromPool(const at::DeviceIndex device_idx) {
+   // Pre-populate the pool with events to avoid stalls in creating events
 @@ -371,6 +379,18 @@ static bool maybe_enable_p2p_access(Device dst_device, Device src_device) {
  }
  
