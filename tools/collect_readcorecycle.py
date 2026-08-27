@@ -28,8 +28,10 @@ PHASE_CHOICES = (
     "graph-prefill",
     "graph-replay",
     "graph-outside",
+    "graph-logits",
     "eager-prefill",
     "eager-decode",
+    "eager-logits",
 )
 
 

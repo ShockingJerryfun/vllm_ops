@@ -41,11 +41,13 @@ is_capture = phase.startswith("graph-capture-")
 if phase not in {
     "eager-prefill",
     "eager-decode",
+    "eager-logits",
     "graph-capture-full",
     "graph-capture-piecewise",
     "graph-prefill",
     "graph-replay",
     "graph-outside",
+    "graph-logits",
 }:
     raise RuntimeError(f"unsupported RCC_PHASE: {phase}")
 
@@ -94,6 +96,7 @@ result: dict[str, Any] = {
 active = False
 armed = False
 execute_index = 0
+sample_index = 0
 
 
 def _start() -> None:
@@ -121,9 +124,16 @@ def _selected_execute_index(current_index: int) -> bool:
     )
 
 
+def _selected_sample_index(current_index: int) -> bool:
+    return armed and phase in {"eager-logits", "graph-logits"} and (
+        current_index == target_step + 1
+    )
+
+
 def _patch_model_runner(model_runner_class: type[Any]) -> None:
     original_execute_model = model_runner_class.execute_model
     original_capture_model = model_runner_class.capture_model
+    original_sample = getattr(model_runner_class, "sample", None)
 
     def measured_execute_model(self: Any, *args: Any, **kwargs: Any) -> Any:
         global execute_index
@@ -150,6 +160,23 @@ def _patch_model_runner(model_runner_class: type[Any]) -> None:
                 _stop()
 
     model_runner_class.execute_model = measured_execute_model
+    if original_sample is not None:
+
+        def measured_sample(self: Any, *args: Any, **kwargs: Any) -> Any:
+            global sample_index
+            current_index = sample_index
+            if armed:
+                sample_index += 1
+            selected = _selected_sample_index(current_index)
+            if selected:
+                _start()
+            try:
+                return original_sample(self, *args, **kwargs)
+            finally:
+                if selected and active:
+                    _stop()
+
+        model_runner_class.sample = measured_sample
     if is_capture:
         model_runner_class.capture_model = measured_capture_model
 
@@ -208,11 +235,12 @@ try:
         llm.generate([{"prompt_token_ids": prompt_ids}], params)
         armed = True
         execute_index = 0
+        sample_index = 0
         outputs = llm.generate([{"prompt_token_ids": prompt_ids}], params)
         armed = False
         result["generated_tokens"] = len(outputs[0].outputs[0].token_ids)
         if "stop" not in result:
-            raise RuntimeError("selected execute_model window was not observed")
+            raise RuntimeError("selected measurement window was not observed")
 
     stop = result["stop"]
     if expected_count is not None and int(stop["event_count"]) != expected_count:
