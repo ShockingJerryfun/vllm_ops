@@ -45,6 +45,7 @@ if phase not in {
     "graph-capture-piecewise",
     "graph-prefill",
     "graph-replay",
+    "graph-outside",
 }:
     raise RuntimeError(f"unsupported RCC_PHASE: {phase}")
 
@@ -119,6 +120,7 @@ def measured_execute_model(
             phase in {"eager-decode", "graph-replay"}
             and current_index == target_step + 1
         )
+        or (phase == "graph-outside" and current_index == target_step)
     )
     if selected:
         _start()

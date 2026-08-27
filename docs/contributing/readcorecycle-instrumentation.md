@@ -164,7 +164,9 @@ RCC_MODE=eager RCC_PHASE=eager-prefill RCC_STAGE_ID=202 \
 
 Valid phase values are `eager-prefill`, `eager-decode`, `graph-capture-full`,
 `graph-capture-piecewise`, `graph-prefill`, and `graph-replay`. Use
-`RCC_TARGET_STEP=0` for the first selected decode/replay step. The default
+`graph-outside` is also valid; there, step zero selects prefill and step one
+selects the first decode execution. Use `RCC_TARGET_STEP=0` for the first
+selected decode/replay step. The default
 128-token input and four generated tokens are a data-quality pilot, not a
 final workload; override `INPUT_TOKENS` and `MAX_TOKENS` only after the pilot
 passes. Never run two stages in one process and never reuse an existing run
