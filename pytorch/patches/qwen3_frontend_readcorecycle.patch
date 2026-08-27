@@ -94,18 +94,22 @@ index 111111111..222222222 100644
        return name == "aten::copy_";
      default:
        return false;
-@@ -860,5 +892,6 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
+@@ -860,5 +892,8 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
      const TypedOperatorHandle<Return(Args...)>& op,
      Args... args) const {
 +  vllm::instrumentation::CommitPublishedReadCoreCycleFrontend(700);
    const bool record_rcc_dispatcher =
        detail::rccQwen3DispatcherStageSelected(op.operator_name(), args...);
++  vllm::instrumentation::ReadCoreCycleFrontendChainGuard
++      rcc_frontend_chain_guard(record_rcc_dispatcher);
    const std::uint64_t rcc_dispatcher_begin =
-@@ -949,6 +982,7 @@ inline Return Dispatcher::redispatch(
+@@ -949,6 +984,9 @@ inline Return Dispatcher::redispatch(
  
  inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
      const {
 +  vllm::instrumentation::CommitPublishedReadCoreCycleFrontend(700);
    const bool record_rcc_dispatcher =
        detail::rccQwen3DispatcherStageSelected(op.operator_name(), stack);
++  vllm::instrumentation::ReadCoreCycleFrontendChainGuard
++      rcc_frontend_chain_guard(record_rcc_dispatcher);
    const std::uint64_t rcc_dispatcher_begin =

@@ -13,6 +13,7 @@ ReadCoreCycleRecorder<kMaxEvents> recorder;
 }  // namespace
 
 thread_local ReadCoreCycleSelection read_core_cycle_selection;
+thread_local std::uint32_t read_core_cycle_frontend_depth;
 
 void CommitReadCoreCycleSample(
     std::uint16_t site_id,
@@ -51,6 +52,7 @@ int rcc_start(
     return EINVAL;
   }
   read_core_cycle_selection = ReadCoreCycleSelection{};
+  read_core_cycle_frontend_depth = 0;
   read_core_cycle_selection.exact_site = exact_site;
   read_core_cycle_selection.context_id = context_id;
   read_core_cycle_selection.active = true;
@@ -72,6 +74,7 @@ int rcc_start_selected(
     return EINVAL;
   }
   read_core_cycle_selection = ReadCoreCycleSelection{};
+  read_core_cycle_frontend_depth = 0;
   read_core_cycle_selection.exact_site = exact_site;
   read_core_cycle_selection.exact_stage = exact_stage;
   read_core_cycle_selection.context_id = context_id;
@@ -81,6 +84,7 @@ int rcc_start_selected(
 
 int rcc_stop() noexcept {
   vllm::instrumentation::read_core_cycle_selection.active = false;
+  vllm::instrumentation::read_core_cycle_frontend_depth = 0;
   return 0;
 }
 
