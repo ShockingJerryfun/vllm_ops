@@ -203,10 +203,23 @@ void CUDAGraph::instantiate() {
 
 void CUDAGraph::replay() {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_graph =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+  const bool record_total =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, kRccReplayTotal);
+  const bool record_prologue =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, kRccReplayPrologue);
+  const bool record_stream =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, kRccReplayStream);
+  const bool record_launch =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, kRccReplayLaunch);
+  const bool record_tail =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, kRccReplayTail);
   const std::uint64_t total_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_total ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   TORCH_CHECK(capture_ended_,
               "Called CUDAGraph::replay without a preceding successful capture.");
@@ -221,7 +234,7 @@ void CUDAGraph::replay() {
 
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const std::uint64_t prologue_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_prologue ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   c10::OptionalDeviceGuard device_guard{capture_stream_.device()};
 
@@ -231,42 +244,51 @@ void CUDAGraph::replay() {
   }
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const std::uint64_t prologue_end =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_prologue ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t stream_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_stream ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   // graph_exec_ may be replayed in any stream.
   const auto stream = at::cuda::getCurrentCUDAStream();
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const std::uint64_t stream_end =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_stream ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t launch_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_launch ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   const cudaError_t launch_status = cudaGraphLaunch(graph_exec_, stream);
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const std::uint64_t launch_end =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_launch ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t tail_begin =
-      record_graph ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_tail ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   AT_CUDA_CHECK(launch_status);
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_graph) {
-    const std::uint64_t tail_end =
-        vllm::instrumentation::ReadCoreCycle();
-    const std::uint64_t total_end = tail_end;
+  if (record_prologue) {
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite,
         kRccReplayPrologue,
         prologue_begin,
         prologue_end);
+  }
+  if (record_stream) {
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite, kRccReplayStream, stream_begin, stream_end);
+  }
+  if (record_launch) {
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite, kRccReplayLaunch, launch_begin, launch_end);
+  }
+  if (record_tail) {
+    const std::uint64_t tail_end =
+        vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite, kRccReplayTail, tail_begin, tail_end);
+  }
+  if (record_total) {
+    const std::uint64_t total_end =
+        vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite, kRccReplayTotal, total_begin, total_end);
   }

@@ -215,19 +215,22 @@ inline void launchKernel(
     void** args,
     cudaStream_t stream,
     std::uint16_t rccStageBase,
-    bool recordRcc,
-    std::uint64_t prepareBegin) {
+    bool recordPrepare,
+    bool recordSubmit,
+    bool recordTotal,
+    std::uint64_t prepareBegin,
+    std::uint64_t totalBegin) {
   // cta_args is always 1 for inductor generated triton kernels,
   // so we don't need to figure out grid dimension here
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (recordRcc) {
+  if (recordPrepare) {
     const std::uint64_t prepareEnd =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite, rccStageBase, prepareBegin, prepareEnd);
   }
   const std::uint64_t submitBegin =
-      recordRcc ? vllm::instrumentation::ReadCoreCycle() : 0;
+      recordSubmit ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
 #if defined(USE_ROCM)
   int device = 0;
@@ -264,11 +267,17 @@ inline void launchKernel(
       nullptr));
 #endif
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (recordRcc) {
+  if (recordSubmit) {
     const std::uint64_t submitEnd =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
         kRccGraphSite, rccStageBase + 1, submitBegin, submitEnd);
+  }
+  if (recordTotal) {
+    const std::uint64_t totalEnd =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccGraphSite, rccStageBase + 2, totalBegin, totalEnd);
   }
 #endif
 }
@@ -426,8 +435,11 @@ PyObject* launch_kernel_inner(
     PyObject* varArgs,
     cudaStream_t cudaStream,
     std::uint16_t rccStageBase,
-    bool recordRcc,
-    std::uint64_t prepareBegin) {
+    bool recordPrepare,
+    bool recordSubmit,
+    bool recordTotal,
+    std::uint64_t prepareBegin,
+    std::uint64_t totalBegin) {
   // Launch the kernel
   // Prepare the arguments for the kernel
   // We allocate 8 bytes per argument on the stack. We then allocate 8 more
@@ -446,8 +458,11 @@ PyObject* launch_kernel_inner(
       kernelArgs.data(),
       cudaStream,
       rccStageBase,
-      recordRcc,
-      prepareBegin);
+      recordPrepare,
+      recordSubmit,
+      recordTotal,
+      prepareBegin,
+      totalBegin);
   Py_RETURN_NONE;
 }
 
@@ -462,8 +477,11 @@ PyObject* launch_kernel_slow(
     PyObject* varArgs,
     cudaStream_t cudaStream,
     std::uint16_t rccStageBase,
-    bool recordRcc,
-    std::uint64_t prepareBegin) {
+    bool recordPrepare,
+    bool recordSubmit,
+    bool recordTotal,
+    std::uint64_t prepareBegin,
+    std::uint64_t totalBegin) {
   /* For the slow case, allocate memory on the stack instead of the heap */
   size_t numArgs = std::strlen(argTypes);
   std::vector<uint64_t> argStorage(numArgs);
@@ -481,8 +499,11 @@ PyObject* launch_kernel_slow(
       kernelArgs.data(),
       cudaStream,
       rccStageBase,
-      recordRcc,
-      prepareBegin);
+      recordPrepare,
+      recordSubmit,
+      recordTotal,
+      prepareBegin,
+      totalBegin);
   Py_RETURN_NONE;
 }
 
@@ -533,14 +554,28 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
   }
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool recordRcc =
+  const bool recordPrepare =
       rccStageBase != 0 &&
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, rccStageBase);
+  const bool recordSubmit =
+      rccStageBase != 0 &&
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, rccStageBase + 1);
+  const bool recordTotal =
+      rccStageBase != 0 &&
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, rccStageBase + 2);
   const std::uint64_t prepareBegin =
-      recordRcc ? vllm::instrumentation::ReadCoreCycle() : 0;
+      recordPrepare ? vllm::instrumentation::ReadCoreCycle() : 0;
+  const std::uint64_t totalBegin =
+      recordTotal ? vllm::instrumentation::ReadCoreCycle() : 0;
 #else
-  const bool recordRcc = false;
+  const bool recordPrepare = false;
+  const bool recordSubmit = false;
+  const bool recordTotal = false;
   const std::uint64_t prepareBegin = 0;
+  const std::uint64_t totalBegin = 0;
 #endif
   CUcontext pctx = nullptr;
 #if defined(USE_ROCM)
@@ -578,8 +613,11 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
         nullptr,
         cudaStream,
         rccStageBase,
-        recordRcc,
-        prepareBegin);
+        recordPrepare,
+        recordSubmit,
+        recordTotal,
+        prepareBegin,
+        totalBegin);
     Py_RETURN_NONE;
   } else if (num_args <= MAX_ARGS) {
     return launch_kernel_inner(
@@ -593,8 +631,11 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
         varArgs,
         cudaStream,
         rccStageBase,
-        recordRcc,
-        prepareBegin);
+        recordPrepare,
+        recordSubmit,
+        recordTotal,
+        prepareBegin,
+        totalBegin);
   } else {
     return launch_kernel_slow(
         func,
@@ -607,8 +648,11 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
         varArgs,
         cudaStream,
         rccStageBase,
-        recordRcc,
-        prepareBegin);
+        recordPrepare,
+        recordSubmit,
+        recordTotal,
+        prepareBegin,
+        totalBegin);
   }
   END_HANDLE_TH_ERRORS
 }
