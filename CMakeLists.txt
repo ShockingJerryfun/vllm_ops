@@ -661,7 +661,15 @@ if(VLLM_GPU_LANG STREQUAL "CUDA" OR VLLM_GPU_LANG STREQUAL "HIP")
         list(APPEND VLLM_STABLE_EXT_SRC ${MARLIN_TEMPLATE_SM75_KERNEL_SRC})
       endif()
 
-      if (MARLIN_FP8_ARCHS)
+      # marlin.cu contains host dispatch entries for the generated FP8-input
+      # specializations whenever the CUDA toolchain supports FP8 types.  Keep
+      # those specializations linkable even when the runtime target is SM80;
+      # they remain dormant on SM80, but omitting their translation units
+      # leaves hidden Marlin template symbols unresolved at final link.
+      if (MARLIN_FP8_ARCHS OR CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.8)
+        if (NOT MARLIN_FP8_ARCHS)
+          set(MARLIN_FP8_ARCHS "8.9")
+        endif()
         file(GLOB MARLIN_TEMPLATE_FP8_KERNEL_SRC "csrc/libtorch_stable/quantization/marlin/sm89_kernel_*.cu")
         set_gencode_flags_for_srcs(
           SRCS "${MARLIN_TEMPLATE_FP8_KERNEL_SRC}"
