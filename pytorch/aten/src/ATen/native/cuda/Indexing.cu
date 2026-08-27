@@ -57,7 +57,7 @@ constexpr uint64_t getDefaultMaxThreadsPerBlock() {
 #endif
 }
 
-constexpr std::uint16_t kRccEagerSite = 700;
+constexpr std::uint16_t kRccGraphSite = 700;
 constexpr std::uint16_t kRccEmbeddingIndexSelectPrepare = 250;
 constexpr std::uint16_t kRccEmbeddingIndexSelectSubmit = 251;
 constexpr int64_t kQwen3VocabSize = 151936;
@@ -1574,7 +1574,7 @@ void index_select_out_cuda_impl(
       self.size(0) == kQwen3VocabSize &&
       self.size(1) == kQwen3HiddenSize &&
       self.scalar_type() == at::kBFloat16 &&
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
   const std::uint64_t prepare_begin =
       record_embedding ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
@@ -1621,7 +1621,7 @@ void index_select_out_cuda_impl(
       const std::uint64_t prepare_end =                                             \
           vllm::instrumentation::ReadCoreCycle();                                   \
       vllm::instrumentation::CommitReadCoreCycleSample(                             \
-          kRccEagerSite,                                                            \
+          kRccGraphSite,                                                            \
           kRccEmbeddingIndexSelectPrepare,                                          \
           prepare_begin,                                                            \
           prepare_end);                                                             \
@@ -1643,7 +1643,7 @@ void index_select_out_cuda_impl(
       const std::uint64_t submit_end =                                             \
           vllm::instrumentation::ReadCoreCycle();                                  \
       vllm::instrumentation::CommitReadCoreCycleSample(                            \
-          kRccEagerSite,                                                           \
+          kRccGraphSite,                                                           \
           kRccEmbeddingIndexSelectSubmit,                                          \
           submit_begin,                                                            \
           submit_end);                                                             \

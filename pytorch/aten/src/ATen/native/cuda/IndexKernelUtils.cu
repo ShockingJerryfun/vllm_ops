@@ -10,7 +10,7 @@
 namespace at::native {
 namespace {
 
-constexpr std::uint16_t kRccEagerSite = 700;
+constexpr std::uint16_t kRccGraphSite = 700;
 constexpr std::uint16_t kRccEmbeddingGatherPrepare = 240;
 constexpr std::uint16_t kRccEmbeddingGatherSubmit = 241;
 constexpr int64_t kQwen3VocabSize = 151936;
@@ -41,7 +41,7 @@ void vectorized_gather_kernel_launch(char * out, char * inp, index_t * idx, int 
   const bool record_embedding =
       slice_size_in_bytes == kQwen3HiddenBytes &&
       ind_dim_size == kQwen3VocabSize &&
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
   const std::uint64_t prepare_begin =
       record_embedding ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
@@ -59,7 +59,7 @@ void vectorized_gather_kernel_launch(char * out, char * inp, index_t * idx, int 
     const std::uint64_t prepare_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
-        kRccEagerSite,
+        kRccGraphSite,
         kRccEmbeddingGatherPrepare,
         prepare_begin,
         prepare_end);
@@ -75,7 +75,7 @@ void vectorized_gather_kernel_launch(char * out, char * inp, index_t * idx, int 
     const std::uint64_t submit_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
-        kRccEagerSite,
+        kRccGraphSite,
         kRccEmbeddingGatherSubmit,
         submit_begin,
         submit_end);
