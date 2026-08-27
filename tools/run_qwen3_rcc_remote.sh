@@ -13,6 +13,7 @@ case "$mode" in
   *) echo "unsupported RCC_MODE: $mode" >&2; exit 40 ;;
 esac
 rt=$root/.runtime_build/runtime
+cache_tag=${RCC_CACHE_TAG:-exact_stage_v2}
 run_id=${RUN_ID:-qwen3_${mode}_${phase}_stage${stage_id}_$(date +%Y%m%dT%H%M%S%z)}
 run_dir=$root/.runtime_build/runs/$run_id
 container=${CONTAINER_NAME:-qwen3_container_fj}
@@ -102,7 +103,7 @@ docker exec \
   -e VLLM_RCC_INCLUDE_DIR="$root/csrc" \
   -e VLLM_ENABLE_V1_MULTIPROCESSING=0 \
   -e USE_LIBUV=0 \
-  -e VLLM_CACHE_ROOT="$root/.runtime_build/caches/exact_stage_v2" \
+  -e VLLM_CACHE_ROOT="$root/.runtime_build/caches/$cache_tag" \
   -e CUDA_VISIBLE_DEVICES=0 \
   -e TRITON_CACHE_DIR="$run_dir/triton_cache" \
   -e VLLM_LOGGING_LEVEL=INFO \
