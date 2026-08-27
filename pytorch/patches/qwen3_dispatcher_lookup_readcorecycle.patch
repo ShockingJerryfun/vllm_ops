@@ -1,0 +1,152 @@
+diff --git a/aten/src/ATen/core/dispatch/Dispatcher.h b/aten/src/ATen/core/dispatch/Dispatcher.h
+index 000000000..111111111 100644
+--- a/aten/src/ATen/core/dispatch/Dispatcher.h
++++ b/aten/src/ATen/core/dispatch/Dispatcher.h
+@@ -635,6 +635,94 @@ class TypedOperatorHandle<Return(Args...)> final : public OperatorHandle {
+ namespace detail {
+ template <class... Args>
+ inline void unused_arg_(const Args&... /*unused*/) {}
++
++constexpr std::uint16_t kRccQwen3Site = 700;
++
++inline bool rccQwen3GemmShapeMatches(
++    std::uint16_t stage_id,
++    const at::Tensor& mat1,
++    const at::Tensor& mat2) {
++  if (mat1.dim() != 2 || mat2.dim() != 2) {
++    return false;
++  }
++  const auto input_width = mat1.size(1);
++  const auto output_width = mat2.size(1);
++  switch (stage_id) {
++    case 105:
++      return input_width == 4096 && output_width == 6144;
++    case 115:
++      return input_width == 4096 && output_width == 4096;
++    case 125:
++      return input_width == 4096 && output_width == 24576;
++    case 135:
++      return input_width == 12288 && output_width == 4096;
++    case 145:
++      return input_width == 4096 && output_width > 24576;
++    default:
++      return false;
++  }
++}
++
++template <class... Args>
++inline bool rccQwen3GemmShapeMatches(
++    std::uint16_t /*stage_id*/, const Args&... /*args*/) {
++  return false;
++}
++
++inline bool rccQwen3NamedDispatcherStageMatches(
++    std::uint16_t stage_id, const std::string& name) {
++  switch (stage_id) {
++    case 33:
++      return name == "_C_cache_ops::reshape_and_cache_flash";
++    case 46:
++      return name == "_vllm_fa2_C::varlen_fwd";
++    case 203:
++      return name == "_C::rms_norm";
++    case 213:
++      return name == "_C::fused_add_rms_norm";
++    case 223:
++      return name == "_C::silu_and_mul";
++    case 233:
++      return name == "_C::rotary_embedding";
++    case 243:
++      return name == "aten::embedding";
++    case 253:
++      return name == "aten::index_select";
++    default:
++      return false;
++  }
++}
++
++template <class... Args>
++inline bool rccQwen3DispatcherStageSelected(
++    const OperatorName& operator_name, const Args&... args) {
++  const std::uint16_t stage_id =
++      vllm::instrumentation::read_core_cycle_selection.exact_stage;
++  if (!vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, stage_id)) {
++    return false;
++  }
++  if (operator_name.name == "aten::mm") {
++    return rccQwen3GemmShapeMatches(stage_id, args...);
++  }
++  return rccQwen3NamedDispatcherStageMatches(stage_id, operator_name.name);
++}
++
++inline bool rccQwen3DispatcherStageSelected(
++    const OperatorName& operator_name, const Stack* stack) {
++  const std::uint16_t stage_id =
++      vllm::instrumentation::read_core_cycle_selection.exact_stage;
++  if (!vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, stage_id)) {
++    return false;
++  }
++  if (operator_name.name == "aten::mm" && stack->size() >= 2 &&
++      (*stack)[0].isTensor() && (*stack)[1].isTensor()) {
++    return rccQwen3GemmShapeMatches(
++        stage_id, (*stack)[0].toTensor(), (*stack)[1].toTensor());
++  }
++  return rccQwen3NamedDispatcherStageMatches(stage_id, operator_name.name);
++}
+ 
+ // CaptureKernelCall is intended to capture return values from Dispatcher
+ // unboxed kernel calls. A record function may request to get outputs from the
+@@ -776,5 +864,9 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
+     const TypedOperatorHandle<Return(Args...)>& op,
+     Args... args) const {
++  const bool record_rcc_dispatcher =
++      detail::rccQwen3DispatcherStageSelected(op.operator_name(), args...);
++  const std::uint64_t rcc_dispatcher_begin =
++      record_rcc_dispatcher ? vllm::instrumentation::ReadCoreCycle() : 0;
+   auto dispatchKeySet =
+       op.operatorDef_->op.dispatchKeyExtractor()
+           .template getDispatchKeySetUnboxed<Args...>(args...);
+@@ -787,6 +879,15 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
+   }
+ #endif
+   const KernelFunction& kernel = op.operatorDef_->op.lookup(dispatchKeySet);
++  if (record_rcc_dispatcher) {
++    const std::uint64_t rcc_dispatcher_end =
++        vllm::instrumentation::ReadCoreCycle();
++    vllm::instrumentation::CommitReadCoreCycleSample(
++        detail::kRccQwen3Site,
++        vllm::instrumentation::read_core_cycle_selection.exact_stage,
++        rcc_dispatcher_begin,
++        rcc_dispatcher_end);
++  }
+ #ifndef PYTORCH_DISABLE_PER_OP_PROFILING
+   auto step_callbacks =
+       at::getStepCallbacksUnlessEmpty(at::RecordScope::FUNCTION);
+@@ -851,6 +952,10 @@ inline Return Dispatcher::redispatch(
+ 
+ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
+     const {
++  const bool record_rcc_dispatcher =
++      detail::rccQwen3DispatcherStageSelected(op.operator_name(), stack);
++  const std::uint64_t rcc_dispatcher_begin =
++      record_rcc_dispatcher ? vllm::instrumentation::ReadCoreCycle() : 0;
+   // note: this doesn't need the mutex because write operations on the list keep
+   // iterators intact.
+   const auto& entry = op.operatorDef_->op;
+@@ -865,6 +970,15 @@ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
+   }
+ #endif
+   const auto& kernel = entry.lookup(dispatchKeySet);
++  if (record_rcc_dispatcher) {
++    const std::uint64_t rcc_dispatcher_end =
++        vllm::instrumentation::ReadCoreCycle();
++    vllm::instrumentation::CommitReadCoreCycleSample(
++        detail::kRccQwen3Site,
++        vllm::instrumentation::read_core_cycle_selection.exact_stage,
++        rcc_dispatcher_begin,
++        rcc_dispatcher_end);
++  }
+ #ifndef PYTORCH_DISABLE_PER_OP_PROFILING
+   auto step_callbacks =
+       at::getStepCallbacksUnlessEmpty(at::RecordScope::FUNCTION);

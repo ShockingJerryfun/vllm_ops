@@ -4444,7 +4444,8 @@ class NativeCachingAllocator : public CUDAAllocator {
          !device_allocator[srcDevice]->hasAllocatedExpandableSegments())) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
       const bool record_copy =
-          vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+          vllm::instrumentation::ReadCoreCycleStageSelected(
+              kRccEagerSite, kRccDeviceCopySubmitApi);
       const std::uint64_t submit_begin =
           record_copy ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif

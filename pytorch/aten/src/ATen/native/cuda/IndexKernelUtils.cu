@@ -13,6 +13,8 @@ namespace {
 constexpr std::uint16_t kRccEagerSite = 700;
 constexpr std::uint16_t kRccEmbeddingGatherPrepare = 240;
 constexpr std::uint16_t kRccEmbeddingGatherSubmit = 241;
+constexpr std::uint16_t kRccEmbeddingGatherTotal = 242;
+constexpr std::uint16_t kRccEmbeddingGatherTail = 244;
 constexpr int64_t kQwen3VocabSize = 151936;
 constexpr int64_t kQwen3HiddenBytes = 4096 * 2;
 
@@ -38,12 +40,22 @@ template <int64_t Alignment, typename index_t>
 void vectorized_gather_kernel_launch(char * out, char * inp, index_t * idx, int num_ind,
                                      int64_t slice_size_in_bytes, int64_t ind_dim_size, int64_t inp_stride_bytes, int64_t out_stride_bytes, bool allow_neg_indices){
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_embedding =
+  const bool qwen3_embedding =
       slice_size_in_bytes == kQwen3HiddenBytes &&
-      ind_dim_size == kQwen3VocabSize &&
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+      ind_dim_size == kQwen3VocabSize;
+  const bool record_embedding_total =
+      qwen3_embedding && vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccEagerSite, kRccEmbeddingGatherTotal);
+  const bool record_embedding_prepare =
+      qwen3_embedding && vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccEagerSite, kRccEmbeddingGatherPrepare);
+  const bool record_embedding_submit =
+      qwen3_embedding && vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccEagerSite, kRccEmbeddingGatherSubmit);
+  const std::uint64_t total_begin =
+      record_embedding_total ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t prepare_begin =
-      record_embedding ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_embedding_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
 
   constexpr int64_t max_num_threads=256;
@@ -55,7 +67,7 @@ void vectorized_gather_kernel_launch(char * out, char * inp, index_t * idx, int 
   dim3 grid = {static_cast<uint32_t>(num_ind), grid_y, 1};
   auto block = std::min(max_num_threads, num_threads);
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_embedding) {
+  if (record_embedding_prepare) {
     const std::uint64_t prepare_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -65,13 +77,15 @@ void vectorized_gather_kernel_launch(char * out, char * inp, index_t * idx, int 
         prepare_end);
   }
   const std::uint64_t submit_begin =
-      record_embedding ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_embedding_submit ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   vectorized_gather_kernel<Alignment, index_t><<<grid, block, 0, at::cuda::getCurrentCUDAStream()>>>(out, inp, idx, num_ind, slice_size_in_bytes,
   ind_dim_size, inp_stride_bytes, out_stride_bytes, allow_neg_indices);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_embedding) {
+  vllm::instrumentation::PublishReadCoreCycleTailBegin(
+      kRccEagerSite, kRccEmbeddingGatherTail);
+  if (record_embedding_submit) {
     const std::uint64_t submit_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -79,6 +93,15 @@ void vectorized_gather_kernel_launch(char * out, char * inp, index_t * idx, int 
         kRccEmbeddingGatherSubmit,
         submit_begin,
         submit_end);
+  }
+  if (record_embedding_total) {
+    const std::uint64_t total_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccEagerSite,
+        kRccEmbeddingGatherTotal,
+        total_begin,
+        total_end);
   }
 #endif
 }

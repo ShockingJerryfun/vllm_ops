@@ -9,6 +9,8 @@ namespace vllm {
 constexpr std::uint16_t kRccEagerSite = 700;
 constexpr std::uint16_t kRccRopePrepare = 230;
 constexpr std::uint16_t kRccRopeSubmit = 231;
+constexpr std::uint16_t kRccRopeTotal = 232;
+constexpr std::uint16_t kRccRopeTail = 234;
 
 template <typename scalar_t, typename cache_t, bool IS_NEOX>
 inline __device__ void apply_token_rotary_embedding(
@@ -122,10 +124,19 @@ void rotary_embedding(
     torch::stable::Tensor& cos_sin_cache,  // [max_position, rot_dim]
     bool is_neox, int64_t rope_dim_offset, bool inverse) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_rope =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(vllm::kRccEagerSite);
+  const bool record_rope_total =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccRopeTotal);
+  const bool record_rope_prepare =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccRopePrepare);
+  const bool record_rope_submit =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccRopeSubmit);
+  const std::uint64_t total_begin =
+      record_rope_total ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t prepare_begin =
-      record_rope ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_rope_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   // num_tokens = batch_size * seq_len
   int64_t num_tokens = positions.numel();
@@ -181,7 +192,7 @@ void rotary_embedding(
       query.get_device_index());
   const cudaStream_t stream = get_current_cuda_stream();
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_rope) {
+  if (record_rope_prepare) {
     const std::uint64_t prepare_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -191,7 +202,7 @@ void rotary_embedding(
         prepare_end);
   }
   const std::uint64_t submit_begin =
-      record_rope ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_rope_submit ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   VLLM_STABLE_DISPATCH_FLOATING_TYPES(
       query.scalar_type(), "rotary_embedding", [&] {
@@ -223,7 +234,9 @@ void rotary_embedding(
             });
       });
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_rope) {
+  vllm::instrumentation::PublishReadCoreCycleTailBegin(
+      vllm::kRccEagerSite, vllm::kRccRopeTail);
+  if (record_rope_submit) {
     const std::uint64_t submit_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -231,6 +244,15 @@ void rotary_embedding(
         vllm::kRccRopeSubmit,
         submit_begin,
         submit_end);
+  }
+  if (record_rope_total) {
+    const std::uint64_t total_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccEagerSite,
+        vllm::kRccRopeTotal,
+        total_begin,
+        total_end);
   }
 #endif
 }

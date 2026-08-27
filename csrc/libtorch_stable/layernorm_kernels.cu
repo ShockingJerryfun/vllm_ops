@@ -14,8 +14,12 @@ namespace vllm {
 constexpr std::uint16_t kRccEagerSite = 700;
 constexpr std::uint16_t kRccRmsNormPrepare = 200;
 constexpr std::uint16_t kRccRmsNormSubmit = 201;
+constexpr std::uint16_t kRccRmsNormTotal = 202;
+constexpr std::uint16_t kRccRmsNormTail = 204;
 constexpr std::uint16_t kRccFusedRmsNormPrepare = 210;
 constexpr std::uint16_t kRccFusedRmsNormSubmit = 211;
+constexpr std::uint16_t kRccFusedRmsNormTotal = 212;
+constexpr std::uint16_t kRccFusedRmsNormTail = 214;
 
 // TODO(woosuk): Further optimize this kernel.
 template <typename scalar_t, int VEC_SIZE, int NUM_DIMS, bool HasWeight>
@@ -227,10 +231,19 @@ void rms_norm(torch::stable::Tensor& out,    // [..., hidden_size]
               torch::stable::Tensor& input,  // [..., hidden_size]
               std::optional<torch::stable::Tensor> weight, double epsilon) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_rms =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(vllm::kRccEagerSite);
+  const bool record_rms_total =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccRmsNormTotal);
+  const bool record_rms_prepare =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccRmsNormPrepare);
+  const bool record_rms_submit =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccRmsNormSubmit);
+  const std::uint64_t total_begin =
+      record_rms_total ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t prepare_begin =
-      record_rms ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_rms_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   STD_TORCH_CHECK(out.is_contiguous());
   if (input.stride(-1) != 1) {
@@ -268,7 +281,7 @@ void rms_norm(torch::stable::Tensor& out,    // [..., hidden_size]
       input.get_device_index());
   const cudaStream_t stream = get_current_cuda_stream();
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_rms) {
+  if (record_rms_prepare) {
     const std::uint64_t prepare_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -278,7 +291,7 @@ void rms_norm(torch::stable::Tensor& out,    // [..., hidden_size]
         prepare_end);
   }
   const std::uint64_t submit_begin =
-      record_rms ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_rms_submit ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   const bool has_weight = weight.has_value();
   VLLM_STABLE_DISPATCH_RANK234(num_dims, [&] {
@@ -313,7 +326,9 @@ void rms_norm(torch::stable::Tensor& out,    // [..., hidden_size]
         });
       });
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_rms) {
+  vllm::instrumentation::PublishReadCoreCycleTailBegin(
+      vllm::kRccEagerSite, vllm::kRccRmsNormTail);
+  if (record_rms_submit) {
     const std::uint64_t submit_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -321,6 +336,15 @@ void rms_norm(torch::stable::Tensor& out,    // [..., hidden_size]
         vllm::kRccRmsNormSubmit,
         submit_begin,
         submit_end);
+  }
+  if (record_rms_total) {
+    const std::uint64_t total_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccEagerSite,
+        vllm::kRccRmsNormTotal,
+        total_begin,
+        total_end);
   }
 #endif
 }
@@ -349,10 +373,19 @@ void fused_add_rms_norm(torch::stable::Tensor& input,     // [..., hidden_size]
                         std::optional<torch::stable::Tensor> weight,
                         double epsilon) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_fused_rms =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(vllm::kRccEagerSite);
+  const bool record_fused_rms_total =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccFusedRmsNormTotal);
+  const bool record_fused_rms_prepare =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccFusedRmsNormPrepare);
+  const bool record_fused_rms_submit =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          vllm::kRccEagerSite, vllm::kRccFusedRmsNormSubmit);
+  const std::uint64_t total_begin =
+      record_fused_rms_total ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t prepare_begin =
-      record_fused_rms ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_fused_rms_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   STD_TORCH_CHECK(input.scalar_type() == residual.scalar_type());
   STD_TORCH_CHECK(residual.is_contiguous());
@@ -383,7 +416,7 @@ void fused_add_rms_norm(torch::stable::Tensor& input,     // [..., hidden_size]
   bool batch_invariant_launch = vllm::vllm_is_batch_invariant();
   const bool has_weight = weight.has_value();
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_fused_rms) {
+  if (record_fused_rms_prepare) {
     const std::uint64_t prepare_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -393,7 +426,7 @@ void fused_add_rms_norm(torch::stable::Tensor& input,     // [..., hidden_size]
         prepare_end);
   }
   const std::uint64_t submit_begin =
-      record_fused_rms ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_fused_rms_submit ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   if (has_weight) {
     auto wt_ptr = reinterpret_cast<std::uintptr_t>(weight->data_ptr());
@@ -417,7 +450,9 @@ void fused_add_rms_norm(torch::stable::Tensor& input,     // [..., hidden_size]
     }
   }
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_fused_rms) {
+  vllm::instrumentation::PublishReadCoreCycleTailBegin(
+      vllm::kRccEagerSite, vllm::kRccFusedRmsNormTail);
+  if (record_fused_rms_submit) {
     const std::uint64_t submit_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -425,6 +460,15 @@ void fused_add_rms_norm(torch::stable::Tensor& input,     // [..., hidden_size]
         vllm::kRccFusedRmsNormSubmit,
         submit_begin,
         submit_end);
+  }
+  if (record_fused_rms_total) {
+    const std::uint64_t total_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        vllm::kRccEagerSite,
+        vllm::kRccFusedRmsNormTotal,
+        total_begin,
+        total_end);
   }
 #endif
 }

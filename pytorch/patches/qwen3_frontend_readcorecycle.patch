@@ -1,0 +1,108 @@
+diff --git a/aten/src/ATen/core/dispatch/Dispatcher.h b/aten/src/ATen/core/dispatch/Dispatcher.h
+index 111111111..222222222 100644
+--- a/aten/src/ATen/core/dispatch/Dispatcher.h
++++ b/aten/src/ATen/core/dispatch/Dispatcher.h
+@@ -42,6 +42,14 @@ class TORCH_API OperatorHandle;
+ template <class FuncType>
+ class TypedOperatorHandle;
+ 
++namespace detail {
++template <class... Args>
++inline bool rccQwen3DispatcherStageSelected(
++    const OperatorName& operator_name, const Args&... args);
++inline bool rccQwen3DispatcherStageSelected(
++    const OperatorName& operator_name, const Stack* stack);
++} // namespace detail
++
+ /**
+  * Implement this interface and register your instance with the dispatcher
+  * to get notified when operators are registered or deregistered with
+@@ -536,6 +544,11 @@ class TORCH_API OperatorHandle {
+   }
+ 
+   void callBoxed(Stack* stack) const {
++    if (detail::rccQwen3DispatcherStageSelected(
++            operator_name(), stack)) {
++      vllm::instrumentation::PublishReadCoreCycleFrontendBegin(
++          700, vllm::instrumentation::read_core_cycle_selection.exact_stage);
++    }
+     c10::Dispatcher::singleton().callBoxed(*this, stack);
+   }
+ 
+@@ -613,6 +626,11 @@ class TypedOperatorHandle<Return(Args...)> final : public OperatorHandle {
+   // See [Note: Argument forwarding in the dispatcher] for why Args doesn't use
+   // &&
+   C10_ALWAYS_INLINE Return call(Args... args) const {
++    if (detail::rccQwen3DispatcherStageSelected(
++            operator_name(), args...)) {
++      vllm::instrumentation::PublishReadCoreCycleFrontendBegin(
++          700, vllm::instrumentation::read_core_cycle_selection.exact_stage);
++    }
+     return c10::Dispatcher::singleton().call<Return, Args...>(
+         *this, std::forward<Args>(args)...);
+   }
+@@ -649,15 +667,20 @@ inline bool rccQwen3GemmShapeMatches(
+   const auto input_width = mat1.size(1);
+   const auto output_width = mat2.size(1);
+   switch (stage_id) {
+     case 105:
++    case 107:
+       return input_width == 4096 && output_width == 6144;
+     case 115:
++    case 117:
+       return input_width == 4096 && output_width == 4096;
+     case 125:
++    case 127:
+       return input_width == 4096 && output_width == 24576;
+     case 135:
++    case 137:
+       return input_width == 12288 && output_width == 4096;
+     case 145:
++    case 147:
+       return input_width == 4096 && output_width > 24576;
+     default:
+       return false;
+@@ -672,20 +695,28 @@ inline bool rccQwen3NamedDispatcherStageMatches(
+     std::uint16_t stage_id, const std::string& name) {
+   switch (stage_id) {
+     case 33:
++    case 35:
+       return name == "_C_cache_ops::reshape_and_cache_flash";
+     case 46:
++    case 48:
+       return name == "_vllm_fa2_C::varlen_fwd";
+     case 203:
++    case 205:
+       return name == "_C::rms_norm";
+     case 213:
++    case 215:
+       return name == "_C::fused_add_rms_norm";
+     case 223:
++    case 225:
+       return name == "_C::silu_and_mul";
+     case 233:
++    case 235:
+       return name == "_C::rotary_embedding";
+     case 243:
++    case 245:
+       return name == "aten::embedding";
+     case 253:
++    case 255:
+       return name == "aten::index_select";
+     default:
+       return false;
+@@ -860,5 +892,6 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
+     const TypedOperatorHandle<Return(Args...)>& op,
+     Args... args) const {
++  vllm::instrumentation::CommitPublishedReadCoreCycleFrontend(700);
+   const bool record_rcc_dispatcher =
+       detail::rccQwen3DispatcherStageSelected(op.operator_name(), args...);
+   const std::uint64_t rcc_dispatcher_begin =
+@@ -949,6 +982,7 @@ inline Return Dispatcher::redispatch(
+ 
+ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
+     const {
++  vllm::instrumentation::CommitPublishedReadCoreCycleFrontend(700);
+   const bool record_rcc_dispatcher =
+       detail::rccQwen3DispatcherStageSelected(op.operator_name(), stack);
+   const std::uint64_t rcc_dispatcher_begin =

@@ -6,7 +6,7 @@
 namespace vllm::instrumentation {
 namespace {
 
-constexpr std::uint32_t kToolAbiVersion = 1;
+constexpr std::uint32_t kToolAbiVersion = 2;
 constexpr std::size_t kMaxEvents = 1ULL << 20;
 ReadCoreCycleRecorder<kMaxEvents> recorder;
 
@@ -52,6 +52,28 @@ int rcc_start(
   }
   read_core_cycle_selection = ReadCoreCycleSelection{};
   read_core_cycle_selection.exact_site = exact_site;
+  read_core_cycle_selection.context_id = context_id;
+  read_core_cycle_selection.active = true;
+  return 0;
+}
+
+int rcc_start_selected(
+    std::uint16_t exact_site,
+    std::uint16_t exact_stage,
+    std::uint32_t context_id,
+    std::uint64_t capacity) noexcept {
+  using namespace vllm::instrumentation;
+  if (read_core_cycle_selection.active) {
+    return EBUSY;
+  }
+  if (exact_site == 0 || exact_stage == 0 || capacity == 0 ||
+      capacity > kMaxEvents ||
+      !recorder.Prepare(static_cast<std::size_t>(capacity))) {
+    return EINVAL;
+  }
+  read_core_cycle_selection = ReadCoreCycleSelection{};
+  read_core_cycle_selection.exact_site = exact_site;
+  read_core_cycle_selection.exact_stage = exact_stage;
   read_core_cycle_selection.context_id = context_id;
   read_core_cycle_selection.active = true;
   return 0;

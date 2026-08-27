@@ -110,7 +110,7 @@ index 5a2ddb378..ac820a7d7 100644
  
      def _expand_signature(signature):
          output = []
-@@ -260,17 +273,53 @@ def make_launcher(constants, signature, tensordesc_meta):
+@@ -260,17 +273,71 @@ def make_launcher(constants, signature, tensordesc_meta):
      params = [f"&arg{i}" for i, ty in signature.items() if ty != "constexpr"]
      params.append("&global_scratch")
      params.append("&profile_scratch")
@@ -123,27 +123,45 @@ index 5a2ddb378..ac820a7d7 100644
 +constexpr std::uint16_t kRccEagerSite = {_RCC_EAGER_SITE};
 +constexpr std::uint16_t kRccTritonPrepare = {rcc_stage_base};
 +constexpr std::uint16_t kRccTritonSubmit = {rcc_stage_base + 1};
++constexpr std::uint16_t kRccTritonTotal = {rcc_stage_base + 2};
 +"""
 +    rcc_prepare_begin = "" if rcc_stage_base is None else """
-+    const bool record_rcc =
-+        vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
++    const bool record_rcc_total =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccEagerSite, kRccTritonTotal);
++    const bool record_rcc_prepare =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccEagerSite, kRccTritonPrepare);
++    const bool record_rcc_submit =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccEagerSite, kRccTritonSubmit);
++    const std::uint64_t total_begin =
++        record_rcc_total ? vllm::instrumentation::ReadCoreCycle() : 0;
 +    const std::uint64_t prepare_begin =
-+        record_rcc ? vllm::instrumentation::ReadCoreCycle() : 0;
++        record_rcc_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 +"""
 +    rcc_submit_boundary = "" if rcc_stage_base is None else """
 +    const std::uint64_t prepare_end =
-+        record_rcc ? vllm::instrumentation::ReadCoreCycle() : 0;
++        record_rcc_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 +    const std::uint64_t submit_begin =
-+        record_rcc ? vllm::instrumentation::ReadCoreCycle() : 0;
++        record_rcc_submit ? vllm::instrumentation::ReadCoreCycle() : 0;
 +"""
 +    rcc_submit_end = "" if rcc_stage_base is None else """
-+    if (record_rcc) {
++    if (record_rcc_prepare) {
++      vllm::instrumentation::CommitReadCoreCycleSample(
++          kRccEagerSite, kRccTritonPrepare, prepare_begin, prepare_end);
++    }
++    if (record_rcc_submit) {
 +      const std::uint64_t submit_end =
 +          vllm::instrumentation::ReadCoreCycle();
 +      vllm::instrumentation::CommitReadCoreCycleSample(
-+          kRccEagerSite, kRccTritonPrepare, prepare_begin, prepare_end);
-+      vllm::instrumentation::CommitReadCoreCycleSample(
 +          kRccEagerSite, kRccTritonSubmit, submit_begin, submit_end);
++    }
++    if (record_rcc_total) {
++      const std::uint64_t total_end =
++          vllm::instrumentation::ReadCoreCycle();
++      vllm::instrumentation::CommitReadCoreCycleSample(
++          kRccEagerSite, kRccTritonTotal, total_begin, total_end);
 +    }
 +"""
 +    alignment = "alignas" if rcc_stage_base is not None else "_Alignas"
@@ -165,7 +183,7 @@ index 5a2ddb378..ac820a7d7 100644
  }} PyCUtensorMapObject;
  
  static inline void gpuAssert(CUresult code, const char *file, int line)
-@@ -322,6 +371,7 @@ static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas
+@@ -322,6 +389,7 @@ static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas
      if (cuLaunchKernelExHandle == NULL) {{
        cuLaunchKernelExHandle = getLaunchKernelExHandle();
      }}
@@ -173,7 +191,7 @@ index 5a2ddb378..ac820a7d7 100644
      CUlaunchConfig config;
      config.gridDimX = gridX * num_ctas;
      config.gridDimY = gridY;
-@@ -373,7 +423,9 @@ static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas
+@@ -373,7 +441,9 @@ static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas
        ));
      }}
  
@@ -183,14 +201,14 @@ index 5a2ddb378..ac820a7d7 100644
    }}
  }}
  
-@@ -388,5 +440,6 @@ static PyObject* py_tensor_map_type = NULL;
+@@ -388,5 +458,6 @@ static PyObject* py_tensor_map_type = NULL;
  static inline DevicePtrInfo getPointer(PyObject *obj, int idx) {{
    DevicePtrInfo ptr_info;
 +  CUresult status;
    ptr_info.dev_ptr = 0;
    ptr_info.valid = true;
    if (PyLong_Check(obj)) {{
-@@ -412,7 +465,7 @@ static inline DevicePtrInfo getPointer(PyObject *obj, int idx) {{
+@@ -412,7 +483,7 @@ static inline DevicePtrInfo getPointer(PyObject *obj, int idx) {{
    if(!ptr_info.dev_ptr)
      return ptr_info;
    uint64_t dev_ptr;
@@ -199,7 +217,7 @@ index 5a2ddb378..ac820a7d7 100644
    if (status == CUDA_ERROR_INVALID_VALUE) {{
        PyErr_Format(PyExc_ValueError,
                     "Pointer argument (at %d) cannot be accessed from Triton (cpu tensor?)", idx);
-@@ -466,7 +519,7 @@ static uint16_t pack_fp16(double f) {{
+@@ -466,7 +537,7 @@ static uint16_t pack_fp16(double f) {{
  #if 0x030600B1 <= PY_VERSION_HEX && PY_VERSION_HEX <= 0x030B00A1 && !defined(PYPY_VERSION)
      _PyFloat_Pack2(f, (unsigned char*)&result, 1);
  #else
@@ -208,7 +226,7 @@ index 5a2ddb378..ac820a7d7 100644
  #endif
      return result;
  }}
-@@ -674,18 +727,34 @@ def wrap_handle_tensordesc(launcher, signature, tensordesc_meta):
+@@ -674,18 +745,34 @@ def wrap_handle_tensordesc(launcher, signature, tensordesc_meta):
  class CudaLauncher(object):
  
      def __init__(self, src, metadata):

@@ -23,11 +23,11 @@ constexpr std::uint16_t kRccFaCombineSubmitApi = 44;
   #define RCC_FA_COMBINE_LAUNCH(LOG_MAX_SPLITS)                              \
     do {                                                                      \
       const std::uint64_t combine_begin =                                    \
-          record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;            \
+          record_fa_combine ? vllm::instrumentation::ReadCoreCycle() : 0;    \
       flash_fwd_splitkv_combine_kernel<                                      \
           Kernel_traits, kBlockM, LOG_MAX_SPLITS, IsEvenKConst>              \
           <<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);    \
-      if (record_fa) {                                                        \
+      if (record_fa_combine) {                                                \
         const std::uint64_t combine_end =                                    \
             vllm::instrumentation::ReadCoreCycle();                          \
         vllm::instrumentation::CommitReadCoreCycleSample(                    \
@@ -85,10 +85,14 @@ DEFINE_FLASH_FORWARD_KERNEL(flash_fwd_splitkv_combine_kernel, int kBlockM, int L
 template<typename Kernel_traits, bool Is_dropout, bool Is_causal>
 void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-    const bool record_fa =
-        vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+    const bool record_fa_prepare =
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccEagerSite, kRccFaLauncherPrepare);
+    const bool record_fa_submit =
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccEagerSite, kRccFaPrimarySubmitApi);
     const std::uint64_t prepare_begin =
-        record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;
+        record_fa_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
     constexpr size_t smem_size = Kernel_traits::kSmemSize;
     // printf("smem_size = %d\n", smem_size);
@@ -126,7 +130,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
                             //     &ctas_per_sm, kernel, Kernel_traits::kNThreads, smem_size);
                             // printf("smem_size = %d, CTAs per SM = %d\n", int(smem_size), ctas_per_sm);
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-                            if (record_fa) {
+                            if (record_fa_prepare) {
                                 const std::uint64_t prepare_end =
                                     vllm::instrumentation::ReadCoreCycle();
                                 vllm::instrumentation::CommitReadCoreCycleSample(
@@ -136,11 +140,11 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
                                     prepare_end);
                             }
                             const std::uint64_t submit_begin =
-                                record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;
+                                record_fa_submit ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
                             kernel<<<grid, Kernel_traits::kNThreads, smem_size, stream>>>(params);
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-                            if (record_fa) {
+                            if (record_fa_submit) {
                                 const std::uint64_t submit_end =
                                     vllm::instrumentation::ReadCoreCycle();
                                 vllm::instrumentation::CommitReadCoreCycleSample(
@@ -162,10 +166,17 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
 template<typename Kernel_traits, bool Is_causal>
 void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-    const bool record_fa =
-        vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+    const bool record_fa_prepare =
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccEagerSite, kRccFaLauncherPrepare);
+    const bool record_fa_submit =
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccEagerSite, kRccFaPrimarySubmitApi);
+    const bool record_fa_combine =
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccEagerSite, kRccFaCombineSubmitApi);
     const std::uint64_t prepare_begin =
-        record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;
+        record_fa_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
     static_assert(!Kernel_traits::Is_Q_in_regs, "SplitKV implementation does not support Is_Q_in_regs");
     static_assert(!Kernel_traits::Share_Q_K_smem, "SplitKV implementation does not support Share_Q_K_smem");
@@ -192,7 +203,7 @@ void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
                                         kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
                                 }
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-                                if (record_fa) {
+                                if (record_fa_prepare) {
                                     const std::uint64_t prepare_end =
                                         vllm::instrumentation::ReadCoreCycle();
                                     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -202,11 +213,11 @@ void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
                                         prepare_end);
                                 }
                                 const std::uint64_t submit_begin =
-                                    record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;
+                                    record_fa_submit ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
                                 kernel<<<grid, Kernel_traits::kNThreads, smem_size, stream>>>(params);
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-                                if (record_fa) {
+                                if (record_fa_submit) {
                                     const std::uint64_t submit_end =
                                         vllm::instrumentation::ReadCoreCycle();
                                     vllm::instrumentation::CommitReadCoreCycleSample(

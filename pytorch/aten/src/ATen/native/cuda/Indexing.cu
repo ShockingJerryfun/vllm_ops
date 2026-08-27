@@ -60,6 +60,8 @@ constexpr uint64_t getDefaultMaxThreadsPerBlock() {
 constexpr std::uint16_t kRccEagerSite = 700;
 constexpr std::uint16_t kRccEmbeddingIndexSelectPrepare = 250;
 constexpr std::uint16_t kRccEmbeddingIndexSelectSubmit = 251;
+constexpr std::uint16_t kRccEmbeddingIndexSelectTotal = 252;
+constexpr std::uint16_t kRccEmbeddingIndexSelectTail = 254;
 constexpr int64_t kQwen3VocabSize = 151936;
 constexpr int64_t kQwen3HiddenSize = 4096;
 
@@ -1569,14 +1571,24 @@ void index_select_out_cuda_impl(
   auto selfDims = self.dim() == 0 ? 1 : self.dim();
 
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_embedding =
+  const bool qwen3_embedding =
       dim == 0 && numIndices == 1 && self.dim() == 2 &&
       self.size(0) == kQwen3VocabSize &&
       self.size(1) == kQwen3HiddenSize &&
-      self.scalar_type() == at::kBFloat16 &&
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccEagerSite);
+      self.scalar_type() == at::kBFloat16;
+  const bool record_embedding_total =
+      qwen3_embedding && vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccEagerSite, kRccEmbeddingIndexSelectTotal);
+  const bool record_embedding_prepare =
+      qwen3_embedding && vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccEagerSite, kRccEmbeddingIndexSelectPrepare);
+  const bool record_embedding_submit =
+      qwen3_embedding && vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccEagerSite, kRccEmbeddingIndexSelectSubmit);
+  const std::uint64_t total_begin =
+      record_embedding_total ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t prepare_begin =
-      record_embedding ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_embedding_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
@@ -1617,7 +1629,7 @@ void index_select_out_cuda_impl(
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
 #define SMALL_INDEX(TENSOR_TYPE, INDICES_TYPE, TYPE, DST_DIM, SRC_DIM, IDX_DIM)     \
   do {                                                                              \
-    if (record_embedding) {                                                         \
+    if (record_embedding_prepare) {                                                 \
       const std::uint64_t prepare_end =                                             \
           vllm::instrumentation::ReadCoreCycle();                                   \
       vllm::instrumentation::CommitReadCoreCycleSample(                             \
@@ -1627,7 +1639,7 @@ void index_select_out_cuda_impl(
           prepare_end);                                                             \
     }                                                                               \
     const std::uint64_t submit_begin =                                              \
-        record_embedding ? vllm::instrumentation::ReadCoreCycle() : 0;             \
+        record_embedding_submit ? vllm::instrumentation::ReadCoreCycle() : 0;      \
     indexSelectSmallIndex<                                                          \
         TENSOR_TYPE, INDICES_TYPE, TYPE, DST_DIM, SRC_DIM, IDX_DIM>                 \
         <<<smallIndexGrid, smallIndexBlock, 0, stream>>>(                           \
@@ -1639,7 +1651,9 @@ void index_select_out_cuda_impl(
             static_cast<TYPE>(sliceSize),                                          \
             selfSelectDimSize);                                                    \
     C10_CUDA_KERNEL_LAUNCH_CHECK();                                                \
-    if (record_embedding) {                                                        \
+    vllm::instrumentation::PublishReadCoreCycleTailBegin(                          \
+        kRccEagerSite, kRccEmbeddingIndexSelectTail);                              \
+    if (record_embedding_submit) {                                                 \
       const std::uint64_t submit_end =                                             \
           vllm::instrumentation::ReadCoreCycle();                                  \
       vllm::instrumentation::CommitReadCoreCycleSample(                            \
@@ -1647,6 +1661,15 @@ void index_select_out_cuda_impl(
           kRccEmbeddingIndexSelectSubmit,                                          \
           submit_begin,                                                            \
           submit_end);                                                             \
+    }                                                                              \
+    if (record_embedding_total) {                                                  \
+      const std::uint64_t total_end =                                              \
+          vllm::instrumentation::ReadCoreCycle();                                  \
+      vllm::instrumentation::CommitReadCoreCycleSample(                            \
+          kRccEagerSite,                                                           \
+          kRccEmbeddingIndexSelectTotal,                                           \
+          total_begin,                                                             \
+          total_end);                                                              \
     }                                                                              \
   } while (false)
 #else
