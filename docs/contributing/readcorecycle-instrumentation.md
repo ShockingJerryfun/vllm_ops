@@ -35,6 +35,11 @@ behavior. The Python file must never read a clock or create timing values; it
 may only validate native cycle records and perform explicit post-run unit
 conversion. No fourth auxiliary timing or collection file is allowed.
 
+`tools/run_qwen3_rcc_measurement.py` and `tools/run_qwen3_rcc_remote.sh` are
+orchestration-only entrypoints. They may select a phase and exact stage, pin the
+existing process, load/unload the PMU module, and call the collector lifecycle;
+they must not read a timing source or synthesize a latency value.
+
 If the canonical tool cannot be included or linked from a target, stop before
 implementing a workaround. Report the exact compile or link failure, propose
 the smallest reuse-based change, and obtain explicit user approval before
@@ -67,7 +72,10 @@ The ABI v2 stage layout for direct paths is fixed as follows:
 - FlashAttention retains stages 40-44, then uses 45 total, 46 Dispatcher,
   47 return tail, 48 frontend, and 49 the full multi-launch submit group;
 - generated Triton launchers use `base+0=prepare`, `base+1=submit`, and
-  `base+2=independent total`;
+  `base+2=independent total`; fixed bases are embedding 300, qkv 310,
+  q/k norm 320, RoPE 330, attention 340, o projection 370, gate/up 380,
+  and down projection 390, while dynamically classified Graph-external
+  launchers use 500 through 580;
 - auxiliary device copy uses base 400 with the same six-stage layout as the
   other two-stage launchers;
 - FULL Graph Replay remains 50 total, 51 prologue, 52 stream lookup,
@@ -142,3 +150,22 @@ The gate passes only when:
 
 If the gate fails, do not build, deploy, or collect measurements. Correct the
 duplication first and report the final search results.
+
+## Server-84 grouped measurement entrypoint
+
+One command measures one exact phase/stage and writes raw, derived, summary,
+controller, environment, and model-log artifacts into a new run directory:
+
+```bash
+EXPECTED_COMMIT=$(git -C /home/fj/vllm_ops_eager rev-parse HEAD) \
+RCC_MODE=eager RCC_PHASE=eager-prefill RCC_STAGE_ID=202 \
+/home/fj/vllm_ops_eager/tools/run_qwen3_rcc_remote.sh
+```
+
+Valid phase values are `eager-prefill`, `eager-decode`, `graph-capture-full`,
+`graph-capture-piecewise`, `graph-prefill`, and `graph-replay`. Use
+`RCC_TARGET_STEP=0` for the first selected decode/replay step. The default
+128-token input and four generated tokens are a data-quality pilot, not a
+final workload; override `INPUT_TOKENS` and `MAX_TOKENS` only after the pilot
+passes. Never run two stages in one process and never reuse an existing run
+directory.
