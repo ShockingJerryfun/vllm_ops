@@ -170,7 +170,10 @@ Valid phase values are `eager-prefill`, `eager-decode`, `eager-logits`,
 the selected decode step's `sample` call so lm_head is measured after
 `execute_model` returns. For `graph-outside`, step zero selects prefill and
 step one selects the first decode execution. Use `RCC_TARGET_STEP=0` for the
-first selected decode/replay step. The default
+first selected decode/replay step. `graph-capture-full` starts after
+`torch.cuda.graph.__enter__` has begun stream capture and stops after the
+matching context exits, excluding model warmups from the selected records.
+The default
 128-token input and four generated tokens are a data-quality pilot, not a
 final workload; override `INPUT_TOKENS` and `MAX_TOKENS` only after the pilot
 passes. Never run two stages in one process and never reuse an existing run

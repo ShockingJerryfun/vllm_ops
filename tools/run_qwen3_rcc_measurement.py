@@ -97,6 +97,8 @@ active = False
 armed = False
 execute_index = 0
 sample_index = 0
+capture_context_index = 0
+selected_capture_contexts: set[int] = set()
 
 
 def _start() -> None:
@@ -177,12 +179,42 @@ def _patch_model_runner(model_runner_class: type[Any]) -> None:
                     _stop()
 
         model_runner_class.sample = measured_sample
-    if is_capture:
+    if is_capture and phase != "graph-capture-full":
         model_runner_class.capture_model = measured_capture_model
+
+
+def _patch_full_capture_context() -> None:
+    original_enter = torch.cuda.graph.__enter__
+    original_exit = torch.cuda.graph.__exit__
+
+    def measured_enter(self: Any) -> None:
+        global capture_context_index
+        original_enter(self)
+        current_index = capture_context_index
+        capture_context_index += 1
+        if current_index == target_step:
+            _start()
+            selected_capture_contexts.add(id(self))
+            result["capture_context_index"] = current_index
+
+    def measured_exit(self: Any, *args: object) -> None:
+        selected = id(self) in selected_capture_contexts
+        try:
+            original_exit(self, *args)
+        finally:
+            if selected:
+                selected_capture_contexts.remove(id(self))
+                if active:
+                    _stop()
+
+    torch.cuda.graph.__enter__ = measured_enter
+    torch.cuda.graph.__exit__ = measured_exit
 
 
 _patch_model_runner(GPUModelRunnerV1)
 _patch_model_runner(GPUModelRunnerV2)
+if phase == "graph-capture-full":
+    _patch_full_capture_context()
 
 try:
     build_source = Path(triton_build.__file__).read_text(encoding="utf-8")
