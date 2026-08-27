@@ -50,6 +50,7 @@ def _stage_identity(stage_id: int, occurrence_index: int) -> dict[str, int | str
         230: "rotary_embedding",
         240: "embed_tokens_gather",
         250: "embed_tokens_index_select",
+        400: "auxiliary_device_copy",
     }
     base = -1
     for candidate in fixed_roles:
@@ -86,7 +87,7 @@ def _stage_identity(stage_id: int, occurrence_index: int) -> dict[str, int | str
     elif base in {30, 100, 110, 120, 130, 220, 230}:
         layer_index = occurrence_index
 
-    if base in {30, 200, 210, 220, 230, 240, 250}:
+    if base in {30, 200, 210, 220, 230, 240, 250, 400}:
         offset = stage_id - base
         stage_group = {
             0: "prepare",

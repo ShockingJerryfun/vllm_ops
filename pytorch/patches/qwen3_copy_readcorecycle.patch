@@ -1,0 +1,73 @@
+diff --git a/aten/src/ATen/native/cuda/Copy.cu b/aten/src/ATen/native/cuda/Copy.cu
+index 86d6c0ed1..333333333 100644
+--- a/aten/src/ATen/native/cuda/Copy.cu
++++ b/aten/src/ATen/native/cuda/Copy.cu
+@@ -12,6 +12,7 @@
+ #include <ATen/native/cuda/Loops.cuh>
+ #include <ATen/native/cuda/MemoryAccess.cuh>
+ #include <ATen/native/cuda/KernelUtils.cuh>
++#include <read_core_cycle_runtime.h>
+ 
+ #include <c10/cuda/CUDACachingAllocator.h>
+ #include <c10/cuda/CUDAEvent.h>
+@@ -32,6 +33,13 @@ namespace at::native {
+ 
+ using namespace at::cuda;
+ 
++namespace {
++constexpr std::uint16_t kRccQwen3Site = 700;
++constexpr std::uint16_t kRccCopyPrepare = 400;
++constexpr std::uint16_t kRccCopyTotal = 402;
++constexpr std::uint16_t kRccCopyTail = 404;
++} // namespace
++
+ void launch_unrolled_elementwise_kernel(
+     int64_t N,
+     const TensorIteratorBase& iter,
+@@ -371,6 +379,18 @@ static bool maybe_enable_p2p_access(Device dst_device, Device src_device) {
+ }
+ 
+ static void copy_kernel_cuda(TensorIterator& iter, bool non_blocking) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  const bool record_total =
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, kRccCopyTotal);
++  const bool record_prepare =
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, kRccCopyPrepare);
++  const std::uint64_t total_begin =
++      record_total ? vllm::instrumentation::ReadCoreCycle() : 0;
++  const std::uint64_t prepare_begin =
++      record_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
++#endif
+   TORCH_CHECK(iter.ntensors() == 2);
+ 
+   Device dst_device = iter.device(0);
+@@ -412,6 +431,27 @@ static void copy_kernel_cuda(TensorIterator& iter, bool non_blocking) {
+ 
+   // Copy on GPU (or between GPUs)
+   if (dst_device.is_cuda() && src_device.is_cuda()) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (record_prepare) {
++      const std::uint64_t prepare_end =
++          vllm::instrumentation::ReadCoreCycle();
++      vllm::instrumentation::CommitReadCoreCycleSample(
++          kRccQwen3Site,
++          kRccCopyPrepare,
++          prepare_begin,
++          prepare_end);
++    }
++#endif
+     copy_device_to_device(iter, non_blocking, p2p_enabled);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    vllm::instrumentation::PublishReadCoreCycleTailBegin(
++        kRccQwen3Site, kRccCopyTail);
++    if (record_total) {
++      const std::uint64_t total_end =
++          vllm::instrumentation::ReadCoreCycle();
++      vllm::instrumentation::CommitReadCoreCycleSample(
++          kRccQwen3Site, kRccCopyTotal, total_begin, total_end);
++    }
++#endif
+     return;
+   }
