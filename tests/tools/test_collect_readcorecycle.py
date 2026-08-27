@@ -28,6 +28,23 @@ def test_auxiliary_copy_and_generated_total_have_fixed_identity() -> None:
     assert _stage_identity(582, 0)["stage_group"] == "total"
 
 
+def test_graph_compiled_launchers_keep_fusion_role_and_layer() -> None:
+    assert _stage_identity(302, 0) == {
+        "operator_role": "embedding_input_norm_fusion",
+        "layer_idx": 0,
+        "occurrence_idx": 0,
+        "stage_group": "total",
+    }
+    assert _stage_identity(342, 0)["layer_idx"] == 1
+    assert _stage_identity(342, 34)["layer_idx"] == 35
+    assert _stage_identity(392, 35) == {
+        "operator_role": "down_residual_next_norm_fusion",
+        "layer_idx": 35,
+        "occurrence_idx": 35,
+        "stage_group": "total",
+    }
+
+
 def test_summarize_raw_keeps_each_occurrence_and_adds_identity(tmp_path) -> None:
     raw_path = tmp_path / "raw.csv"
     summary_path = tmp_path / "summary.json"

@@ -131,7 +131,33 @@ def _stage_identity(stage_id: int, occurrence_index: int) -> dict[str, int | str
             53: "submit",
             54: "return_tail",
         }[stage_id]
-    elif 300 <= stage_id < 600:
+    elif 300 <= stage_id < 400:
+        generated_base = stage_id - (stage_id % 10)
+        generated_roles = {
+            300: "embedding_input_norm_fusion",
+            310: "layer0_qk_norm_reduction_fusion",
+            320: "layer0_k_norm_rope_fusion",
+            330: "layer0_q_norm_rope_fusion",
+            340: "repeated_qk_norm_reduction_fusion",
+            350: "repeated_k_norm_rope_fusion",
+            360: "repeated_q_norm_rope_fusion",
+            370: "post_attention_residual_norm_fusion",
+            380: "silu_slice_fusion",
+            390: "down_residual_next_norm_fusion",
+        }
+        role = generated_roles[generated_base]
+        if generated_base <= 330:
+            layer_index = 0
+        elif generated_base <= 360:
+            layer_index = occurrence_index + 1
+        else:
+            layer_index = occurrence_index
+        stage_group = {
+            0: "prepare",
+            1: "submit",
+            2: "total",
+        }.get(stage_id - generated_base, "unknown")
+    elif 400 <= stage_id < 600:
         generated_base = stage_id - (stage_id % 10)
         role = f"generated_launcher_{generated_base}"
         stage_group = {

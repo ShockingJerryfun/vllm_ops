@@ -81,12 +81,22 @@ diff --git a/third_party/nvidia/backend/driver.py b/third_party/nvidia/backend/d
 index 5a2ddb378..ac820a7d7 100644
 --- a/third_party/nvidia/backend/driver.py
 +++ b/third_party/nvidia/backend/driver.py
-@@ -16,6 +16,19 @@ libdevice_dir = os.path.join(dirname, "lib")
+@@ -16,6 +16,29 @@ libdevice_dir = os.path.join(dirname, "lib")
  libraries = ['libcuda.so.1']
  PyCUtensorMap = None
  
 +_RCC_EAGER_SITE = 700
 +_RCC_QWEN3_EAGER_STAGE_BASE = {
++    "triton_red_fused__to_copy_embedding_rms_norm_0": 300,
++    "triton_red_fused_1": 310,
++    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_2": 320,
++    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_3": 330,
++    "triton_red_fused_3": 340,
++    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_4": 350,
++    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_5": 360,
++    "triton_red_fused_fused_add_rms_norm_0": 370,
++    "triton_poi_fused_mul_silu_slice_1": 380,
++    "triton_red_fused_fused_add_rms_norm_2": 390,
 +    "_combine_sampled_and_draft_tokens_kernel": 500,
 +    "_compute_slot_mappings_kernel": 510,
 +    "_gather_block_tables_kernel": 520,
