@@ -29,6 +29,8 @@ phase = _required("RCC_PHASE")
 stage_id = int(_required("RCC_STAGE_ID"))
 context_id = int(os.environ.get("RCC_CONTEXT_ID", "700101"))
 target_step = int(os.environ.get("RCC_TARGET_STEP", "0"))
+expected_count_text = os.environ.get("RCC_EXPECTED_COUNT", "")
+expected_count = int(expected_count_text) if expected_count_text else None
 input_tokens = int(os.environ.get("RCC_INPUT_TOKENS", "128"))
 max_tokens = int(os.environ.get("RCC_MAX_TOKENS", "4"))
 kv_cache_memory_bytes = int(os.environ.get("RCC_KV_CACHE_MEMORY_BYTES", "1258291200"))
@@ -74,6 +76,7 @@ result: dict[str, Any] = {
     "stage_id": stage_id,
     "phase": phase,
     "target_step": target_step,
+    "expected_count": expected_count,
     "cpu": 249,
     "model": "/home/model/Qwen3-8B-Instruct",
     "input_tokens": input_tokens,
@@ -199,6 +202,11 @@ try:
             raise RuntimeError("selected execute_model window was not observed")
 
     stop = result["stop"]
+    if expected_count is not None and int(stop["event_count"]) != expected_count:
+        raise RuntimeError(
+            f"event_count {stop['event_count']} does not match expected "
+            f"{expected_count}"
+        )
     collector_module.summarize_raw(
         run_dir / "raw.csv",
         run_dir / "summary.json",

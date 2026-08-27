@@ -91,6 +91,7 @@ docker exec \
   -e RCC_STAGE_ID="$stage_id" \
   -e RCC_CONTEXT_ID="${RCC_CONTEXT_ID:-700101}" \
   -e RCC_TARGET_STEP="${RCC_TARGET_STEP:-0}" \
+  -e RCC_EXPECTED_COUNT="${RCC_EXPECTED_COUNT:-}" \
   -e RCC_CPU_FREQUENCY_HZ="$cpu_frequency_hz" \
   -e RCC_INPUT_TOKENS="${INPUT_TOKENS:-128}" \
   -e RCC_MAX_TOKENS="${MAX_TOKENS:-4}" \
