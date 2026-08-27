@@ -6,6 +6,23 @@
 
 namespace vllm::instrumentation {
 
+extern thread_local std::uint32_t read_core_cycle_frontend_depth;
+
+class ReadCoreCycleFrontendChainGuard final {
+ public:
+  explicit ReadCoreCycleFrontendChainGuard(bool selected) noexcept
+      : selected_(selected) {}
+
+  ~ReadCoreCycleFrontendChainGuard() {
+    if (selected_ && read_core_cycle_frontend_depth != 0) {
+      --read_core_cycle_frontend_depth;
+    }
+  }
+
+ private:
+  bool selected_;
+};
+
 VLLM_RCC_PUBLIC void CommitReadCoreCycleSample(
     std::uint16_t site_id,
     std::uint16_t stage_id,
@@ -15,6 +32,10 @@ VLLM_RCC_PUBLIC void CommitReadCoreCycleSample(
 [[gnu::always_inline]] inline void PublishReadCoreCycleFrontendBegin(
     std::uint16_t site_id, std::uint16_t stage_id) noexcept {
   if (!ReadCoreCycleStageSelected(site_id, stage_id)) {
+    return;
+  }
+  ++read_core_cycle_frontend_depth;
+  if (read_core_cycle_frontend_depth != 1) {
     return;
   }
   read_core_cycle_selection.published_frontend_begin = ReadCoreCycle();
