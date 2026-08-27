@@ -59,8 +59,8 @@ index 786f51e54..38c5821ac 100644
  
      with tempfile.TemporaryDirectory() as tmpdir:
 -        src_path = os.path.join(tmpdir, name + ".c")
-+        suffix = ".cpp" if source_language == "c++" else ".c"
-+        src_path = os.path.join(tmpdir, name + suffix)
++        source_suffix = ".cpp" if source_language == "c++" else ".c"
++        src_path = os.path.join(tmpdir, name + source_suffix)
          with open(src_path, "w") as f:
              f.write(src)
 -        so = _build(name, src_path, tmpdir, library_dirs or [], include_dirs or [], libraries or [], ccflags or [])
@@ -222,4 +222,3 @@ index 5a2ddb378..ac820a7d7 100644
          )
  
          self.num_ctas = getattr(metadata, "num_ctas", 1)
-
