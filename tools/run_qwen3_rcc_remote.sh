@@ -18,7 +18,27 @@ run_dir=$root/.runtime_build/runs/$run_id
 container=${CONTAINER_NAME:-qwen3_container_fj}
 module=/home/fj/project_archive/retired_20260825_vllm_ops_migration/qwen3_operator_dispatch_readcorecycle_v1/runs/r3_overlay_pilot_20260824T173046+0800/module/pmccntr_el0_enable.ko
 cpu=249
-cpu_frequency_hz=$(($(cat /sys/devices/system/cpu/$cpu/cpufreq/cpuinfo_max_freq) * 1000))
+read_cpu_attr() {
+  local attribute=$1
+  local path=/sys/devices/system/cpu/cpu$cpu/cpufreq/$attribute
+  local attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if [ -r "$path" ]; then
+      cat "$path"
+      return 0
+    fi
+    sleep 0.2
+  done
+  echo "CPU frequency attribute unavailable: $path" >&2
+  return 1
+}
+cpu_max_khz=$(read_cpu_attr cpuinfo_max_freq)
+cpu_frequency_hz=${RCC_CPU_FREQUENCY_HZ:-$((cpu_max_khz * 1000))}
+cpu_governor=$(read_cpu_attr scaling_governor)
+if [ "$cpu_governor" != performance ]; then
+  echo "CPU$cpu governor is not performance: $cpu_governor" >&2
+  exit 40
+fi
 
 if [ "$(git -C "$root" rev-parse HEAD)" != "$expected_commit" ]; then
   echo "unexpected commit in $root" >&2
@@ -65,9 +85,10 @@ insmod "$module" cpu=$cpu enable_counter=1 exclude_kernel=0
   echo "phase=$phase"
   echo "stage_id=$stage_id"
   echo "cpu=$cpu"
-  echo "governor=$(cat /sys/devices/system/cpu/$cpu/cpufreq/scaling_governor)"
-  echo "cur_freq=$(cat /sys/devices/system/cpu/$cpu/cpufreq/scaling_cur_freq)"
-  echo "max_freq=$(cat /sys/devices/system/cpu/$cpu/cpufreq/cpuinfo_max_freq)"
+  echo "governor=$cpu_governor"
+  echo "cur_freq=$(read_cpu_attr scaling_cur_freq)"
+  echo "max_freq=$cpu_max_khz"
+  echo "conversion_frequency_hz=$cpu_frequency_hz"
   echo "commit=$(git -C "$root" rev-parse HEAD)"
   sha256sum "$rt/lib/libvllm_read_core_cycle.so"
   nvidia-smi --query-gpu=index,name,pci.bus_id,memory.used,utilization.gpu --format=csv,noheader
@@ -107,7 +128,7 @@ if [ -d /sys/module/pmccntr_el0_enable ]; then
   exit 46
 fi
 {
-  echo "cur_freq=$(cat /sys/devices/system/cpu/$cpu/cpufreq/scaling_cur_freq)"
+  echo "cur_freq=$(read_cpu_attr scaling_cur_freq)"
   nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv,noheader
 } > "$run_dir/environment_after.txt"
 echo "RUN_DIR=$run_dir"
