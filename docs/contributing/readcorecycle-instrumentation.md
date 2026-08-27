@@ -166,11 +166,13 @@ RCC_MODE=eager RCC_PHASE=eager-prefill RCC_STAGE_ID=202 \
 /home/fj/vllm_ops_eager/tools/run_qwen3_rcc_remote.sh
 ```
 
-Valid phase values are `eager-prefill`, `eager-decode`, `graph-capture-full`,
-`graph-capture-piecewise`, `graph-prefill`, `graph-replay`, and
-`graph-outside`. For `graph-outside`, step zero selects prefill and step one
-selects the first decode execution. Use `RCC_TARGET_STEP=0` for the first
-selected decode/replay step. The default
+Valid phase values are `eager-prefill`, `eager-decode`, `eager-logits`,
+`graph-capture-full`, `graph-capture-piecewise`, `graph-prefill`,
+`graph-replay`, `graph-outside`, and `graph-logits`. The logits phases wrap
+the selected decode step's `sample` call so lm_head is measured after
+`execute_model` returns. For `graph-outside`, step zero selects prefill and
+step one selects the first decode execution. Use `RCC_TARGET_STEP=0` for the
+first selected decode/replay step. The default
 128-token input and four generated tokens are a data-quality pilot, not a
 final workload; override `INPUT_TOKENS` and `MAX_TOKENS` only after the pilot
 passes. Never run two stages in one process and never reuse an existing run

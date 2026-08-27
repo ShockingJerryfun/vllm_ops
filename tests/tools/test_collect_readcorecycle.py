@@ -1,7 +1,16 @@
 import csv
 import json
 
-from tools.collect_readcorecycle import _stage_identity, summarize_raw
+from tools.collect_readcorecycle import (
+    PHASE_CHOICES,
+    _stage_identity,
+    summarize_raw,
+)
+
+
+def test_logits_measurement_phases_are_valid() -> None:
+    assert "eager-logits" in PHASE_CHOICES
+    assert "graph-logits" in PHASE_CHOICES
 
 
 def test_qwen3_norm_occurrences_map_to_semantic_roles() -> None:
