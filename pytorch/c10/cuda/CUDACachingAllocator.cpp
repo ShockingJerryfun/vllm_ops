@@ -44,7 +44,7 @@
 namespace {
 
 constexpr std::uint16_t kRccEagerSite = 700;
-constexpr std::uint16_t kRccDeviceCopySubmitApi = 400;
+constexpr std::uint16_t kRccDeviceCopySubmitApi = 401;
 
 } // namespace
 

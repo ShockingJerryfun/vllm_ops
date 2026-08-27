@@ -68,6 +68,8 @@ The ABI v2 stage layout for direct paths is fixed as follows:
   47 return tail, 48 frontend, and 49 the full multi-launch submit group;
 - generated Triton launchers use `base+0=prepare`, `base+1=submit`, and
   `base+2=independent total`;
+- auxiliary device copy uses base 400 with the same six-stage layout as the
+  other two-stage launchers;
 - FULL Graph Replay remains 50 total, 51 prologue, 52 stream lookup,
   53 `cudaGraphLaunch` Host submission, and 54 return tail.
 

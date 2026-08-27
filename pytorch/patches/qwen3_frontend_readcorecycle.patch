@@ -62,7 +62,7 @@ index 111111111..222222222 100644
        return input_width == 4096 && output_width > 24576;
      default:
        return false;
-@@ -672,20 +695,28 @@ inline bool rccQwen3NamedDispatcherStageMatches(
+@@ -672,22 +695,31 @@ inline bool rccQwen3NamedDispatcherStageMatches(
      std::uint16_t stage_id, const std::string& name) {
    switch (stage_id) {
      case 33:
@@ -89,6 +89,9 @@ index 111111111..222222222 100644
      case 253:
 +    case 255:
        return name == "aten::index_select";
+     case 403:
++    case 405:
+       return name == "aten::copy_";
      default:
        return false;
 @@ -860,5 +892,6 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(

@@ -2,7 +2,7 @@ diff --git a/aten/src/ATen/core/dispatch/Dispatcher.h b/aten/src/ATen/core/dispa
 index 000000000..111111111 100644
 --- a/aten/src/ATen/core/dispatch/Dispatcher.h
 +++ b/aten/src/ATen/core/dispatch/Dispatcher.h
-@@ -635,6 +635,94 @@ class TypedOperatorHandle<Return(Args...)> final : public OperatorHandle {
+@@ -635,6 +635,96 @@ class TypedOperatorHandle<Return(Args...)> final : public OperatorHandle {
  namespace detail {
  template <class... Args>
  inline void unused_arg_(const Args&... /*unused*/) {}
@@ -59,6 +59,8 @@ index 000000000..111111111 100644
 +      return name == "aten::embedding";
 +    case 253:
 +      return name == "aten::index_select";
++    case 403:
++      return name == "aten::copy_";
 +    default:
 +      return false;
 +  }
