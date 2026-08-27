@@ -105,6 +105,7 @@ enum class RccGemmRole : std::uint16_t {
 };
 
 constexpr std::uint16_t kRccGemmImplementationPrepareOffset = 0;
+constexpr std::uint16_t kRccGemmTotalOffset = 4;
 
 RccGemmRole rcc_gemm_role(const Tensor& mat1, const Tensor& mat2) {
   const auto input_width = mat1.size(1);
@@ -379,11 +380,20 @@ bool launchGemmCublas(
 
 Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& mat1, const Tensor& mat2, const Scalar& beta, const Scalar& alpha, Activation activation=Activation::None, bool disable_addmm_cuda_lt_override=false) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_gemm =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
   const auto gemm_role = rcc_gemm_role(mat1, mat2);
+  const bool record_gemm_prepare =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite,
+          rcc_gemm_stage(
+              gemm_role, kRccGemmImplementationPrepareOffset));
+  const bool record_gemm_total =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite,
+          rcc_gemm_stage(gemm_role, kRccGemmTotalOffset));
+  const std::uint64_t total_begin =
+      record_gemm_total ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t implementation_begin =
-      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_gemm_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   // Shape checks {
   // Make sure to keep addmm_cuda below in sync with this code; it
@@ -525,7 +535,7 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
         [&] {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
           if constexpr (std::is_same_v<scalar_t, at::BFloat16>) {
-            if (record_gemm) {
+            if (record_gemm_prepare) {
               const std::uint64_t implementation_end =
                   vllm::instrumentation::ReadCoreCycle();
               vllm::instrumentation::CommitReadCoreCycleSample(
@@ -570,6 +580,17 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
   if (!result.is_same(*args.result)) {
     result.copy_(*args.result);
   }
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (record_gemm_total) {
+    const std::uint64_t total_end =
+        vllm::instrumentation::ReadCoreCycle();
+    vllm::instrumentation::CommitReadCoreCycleSample(
+        kRccGraphSite,
+        rcc_gemm_stage(gemm_role, kRccGemmTotalOffset),
+        total_begin,
+        total_end);
+  }
+#endif
   return result;
 }
 

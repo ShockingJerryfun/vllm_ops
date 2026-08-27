@@ -34,6 +34,8 @@ constexpr float kFp8ScaleDivisor = 448.f;
 constexpr std::uint16_t kRccGraphSite = 700;
 constexpr std::uint16_t kRccKvImplementationPrepare = 30;
 constexpr std::uint16_t kRccKvSubmitApi = 31;
+constexpr std::uint16_t kRccKvTotal = 32;
+constexpr std::uint16_t kRccKvTail = 34;
 
 void swap_blocks(torch::stable::Tensor& src, torch::stable::Tensor& dst,
                  int64_t block_size_in_bytes,
@@ -738,7 +740,7 @@ void reshape_and_cache(
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   #define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)               \
     do {                                                                       \
-      if (record_kv) {                                                         \
+      if (record_kv_prepare) {                                                 \
         const std::uint64_t prepare_end =                                      \
             vllm::instrumentation::ReadCoreCycle();                           \
         vllm::instrumentation::CommitReadCoreCycleSample(                     \
@@ -748,7 +750,7 @@ void reshape_and_cache(
             prepare_end);                                                     \
       }                                                                        \
       const std::uint64_t submit_begin =                                      \
-          record_kv ? vllm::instrumentation::ReadCoreCycle() : 0;             \
+          record_kv_submit ? vllm::instrumentation::ReadCoreCycle() : 0;      \
       vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>           \
           <<<grid, block, 0, stream>>>(                                       \
               reinterpret_cast<KV_T*>(key.data_ptr()),                        \
@@ -761,11 +763,19 @@ void reshape_and_cache(
               reinterpret_cast<const float*>(k_scale.data_ptr()),             \
               reinterpret_cast<const float*>(v_scale.data_ptr()),             \
               kv_scale_stride);                                               \
-      if (record_kv) {                                                         \
+      vllm::instrumentation::PublishReadCoreCycleTailBegin(                   \
+          kRccGraphSite, kRccKvTail);                                         \
+      if (record_kv_submit) {                                                  \
         const std::uint64_t submit_end =                                       \
             vllm::instrumentation::ReadCoreCycle();                           \
         vllm::instrumentation::CommitReadCoreCycleSample(                     \
             kRccGraphSite, kRccKvSubmitApi, submit_begin, submit_end);         \
+      }                                                                        \
+      if (record_kv_total) {                                                   \
+        const std::uint64_t total_end =                                        \
+            vllm::instrumentation::ReadCoreCycle();                           \
+        vllm::instrumentation::CommitReadCoreCycleSample(                     \
+            kRccGraphSite, kRccKvTotal, total_begin, total_end);               \
       }                                                                        \
     } while (false)
 #else
@@ -795,10 +805,19 @@ void reshape_and_cache_flash(
     torch::stable::Tensor& k_scale,    // [1] or [num_heads]
     torch::stable::Tensor& v_scale) {  // [1] or [num_heads]
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_kv =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+  const bool record_kv_total =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, kRccKvTotal);
+  const bool record_kv_prepare =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, kRccKvImplementationPrepare);
+  const bool record_kv_submit =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, kRccKvSubmitApi);
+  const std::uint64_t total_begin =
+      record_kv_total ? vllm::instrumentation::ReadCoreCycle() : 0;
   const std::uint64_t prepare_begin =
-      record_kv ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_kv_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   // NOTE(woosuk): In vLLM V1, key.size(0) can be different from
   // slot_mapping.size(0) because of padding for CUDA graphs.

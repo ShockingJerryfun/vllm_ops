@@ -14,6 +14,8 @@ namespace vllm {
 constexpr std::uint16_t kRccGraphSite = 700;
 constexpr std::uint16_t kRccSiluPrepare = 220;
 constexpr std::uint16_t kRccSiluSubmit = 221;
+constexpr std::uint16_t kRccSiluTotal = 222;
+constexpr std::uint16_t kRccSiluTail = 224;
 
 // `alpha` and `beta` are applied to opposite operands:
 //   - alpha lives INSIDE the activation (the activated half): the gated
@@ -234,13 +236,21 @@ packed_gelu_tanh_kernel(const packed_t& val, const float /*alpha*/) {
 
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   #define RCC_SILU_PREPARE_BEGIN()                                            \
-    const bool record_silu =                                                  \
-        vllm::instrumentation::ReadCoreCycleSiteSelected(                    \
-            vllm::kRccGraphSite);                                            \
+    const bool record_silu_total =                                            \
+        vllm::instrumentation::ReadCoreCycleStageSelected(                   \
+            vllm::kRccGraphSite, vllm::kRccSiluTotal);                       \
+    const bool record_silu_prepare =                                          \
+        vllm::instrumentation::ReadCoreCycleStageSelected(                   \
+            vllm::kRccGraphSite, vllm::kRccSiluPrepare);                     \
+    const bool record_silu_submit =                                           \
+        vllm::instrumentation::ReadCoreCycleStageSelected(                   \
+            vllm::kRccGraphSite, vllm::kRccSiluSubmit);                      \
+    const std::uint64_t total_begin =                                         \
+        record_silu_total ? vllm::instrumentation::ReadCoreCycle() : 0;      \
     const std::uint64_t prepare_begin =                                       \
-        record_silu ? vllm::instrumentation::ReadCoreCycle() : 0
+        record_silu_prepare ? vllm::instrumentation::ReadCoreCycle() : 0
   #define RCC_SILU_SUBMIT_BEGIN()                                             \
-    if (record_silu) {                                                        \
+    if (record_silu_prepare) {                                                \
       const std::uint64_t prepare_end =                                       \
           vllm::instrumentation::ReadCoreCycle();                             \
       vllm::instrumentation::CommitReadCoreCycleSample(                       \
@@ -248,14 +258,22 @@ packed_gelu_tanh_kernel(const packed_t& val, const float /*alpha*/) {
           prepare_end);                                                       \
     }                                                                         \
     const std::uint64_t submit_begin =                                        \
-        record_silu ? vllm::instrumentation::ReadCoreCycle() : 0
+        record_silu_submit ? vllm::instrumentation::ReadCoreCycle() : 0
   #define RCC_SILU_SUBMIT_END()                                               \
-    if (record_silu) {                                                        \
+    vllm::instrumentation::PublishReadCoreCycleTailBegin(                     \
+        vllm::kRccGraphSite, vllm::kRccSiluTail);                            \
+    if (record_silu_submit) {                                                 \
       const std::uint64_t submit_end =                                        \
           vllm::instrumentation::ReadCoreCycle();                             \
       vllm::instrumentation::CommitReadCoreCycleSample(                       \
           vllm::kRccGraphSite, vllm::kRccSiluSubmit, submit_begin,            \
           submit_end);                                                        \
+    }                                                                         \
+    if (record_silu_total) {                                                  \
+      const std::uint64_t total_end =                                         \
+          vllm::instrumentation::ReadCoreCycle();                             \
+      vllm::instrumentation::CommitReadCoreCycleSample(                       \
+          vllm::kRccGraphSite, vllm::kRccSiluTotal, total_begin, total_end);  \
     }
 #else
   #define RCC_SILU_PREPARE_BEGIN()

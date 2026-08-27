@@ -43,14 +43,41 @@ implementation.
 
 ## Freeze after validation
 
-**Status: ABI v1 is frozen.** The server-84 validation gate passed on
+**Status: ABI v2 is under validation.** ABI v1 passed the server-84 gate on
 2026-08-25 at repository commit `5c2a47143d2fb2310cf0055349acbb409bf9d514`.
 It proved real nonzero PMCCNTR begin/end/delta consistency, complete sequence,
 fixed owner CPU, migration zero, lost zero, successful cold CSV export, and
 explicit cycles-to-microseconds conversion using a verified CPU frequency and
 PMCR divider state.
 
-After that gate passes, do not modify the three canonical files or the three
+ABI v2 adds only an exact-stage selector to the cold control path. It preserves
+the serialized reader, the 32-byte event layout, the recorder, raw CSV columns,
+and every hot interval boundary. Each measurement run selects exactly one site
+and one stage so independent total and child-stage measurements cannot nest.
+
+The ABI v2 stage layout for direct paths is fixed as follows:
+
+- two-stage launchers use `base+0=prepare`, `base+1=submit`,
+  `base+2=independent total`, `base+3=Dispatcher`, `base+4=return tail`,
+  and `base+5=frontend`; bases are KV 30, RMSNorm 200, fused RMSNorm 210,
+  SiLU 220, RoPE 230, embedding gather 240, and index-select 250;
+- GEMM roles retain their four proven internal stages at bases 100, 110, 120,
+  130, and 140, then use `base+4=independent total`, `base+5=Dispatcher`,
+  `base+6=return tail`, and `base+7=frontend`;
+- FlashAttention retains stages 40-44, then uses 45 total, 46 Dispatcher,
+  47 return tail, 48 frontend, and 49 the full multi-launch submit group;
+- generated Triton launchers use `base+0=prepare`, `base+1=submit`, and
+  `base+2=independent total`;
+- FULL Graph Replay remains 50 total, 51 prologue, 52 stream lookup,
+  53 `cudaGraphLaunch` Host submission, and 54 return tail.
+
+Frontend and return-tail spans cross function boundaries through fields in the
+single thread-local selection object. They never create another recorder or
+event format. The collector requires a phase label for each derived artifact
+and adds deterministic occurrence, semantic-role, layer, and stage-group
+columns without altering raw CSV evidence.
+
+After the ABI v2 gate passes, do not modify the three canonical files or the three
 auxiliary files. Add future measurement sites only in target implementation
 sources and external evidence mappings. A tool change after freeze requires
 explicit user approval, an ABI version increment, a fresh observer-effect

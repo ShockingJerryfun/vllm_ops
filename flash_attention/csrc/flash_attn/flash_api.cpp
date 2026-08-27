@@ -26,6 +26,9 @@ namespace FLASH_NAMESPACE {
 constexpr std::uint16_t kRccGraphSite = 700;
 constexpr std::uint16_t kRccFaImplementationPrepare = 40;
 constexpr std::uint16_t kRccFaBackendDispatch = 41;
+constexpr std::uint16_t kRccFaTotal = 45;
+constexpr std::uint16_t kRccFaTail = 47;
+constexpr std::uint16_t kRccFaSubmitGroup = 49;
 
 void set_params_fprop(Flash_fwd_params &params,
                       // sizes
@@ -247,7 +250,8 @@ void set_params_dgrad(Flash_bwd_params &params,
 void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
     const bool record_fa =
-        vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccGraphSite, kRccFaBackendDispatch);
     const std::uint64_t dispatch_begin =
         record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
@@ -570,10 +574,19 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
                std::optional<at::Generator> gen_) {
 
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-    const bool record_fa =
-        vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
+    const bool record_fa_total =
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccGraphSite, kRccFaTotal);
+    const bool record_fa_prepare =
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccGraphSite, kRccFaImplementationPrepare);
+    const bool record_fa_submit_group =
+        vllm::instrumentation::ReadCoreCycleStageSelected(
+            kRccGraphSite, kRccFaSubmitGroup);
+    const std::uint64_t total_begin =
+        record_fa_total ? vllm::instrumentation::ReadCoreCycle() : 0;
     const std::uint64_t implementation_begin =
-        record_fa ? vllm::instrumentation::ReadCoreCycle() : 0;
+        record_fa_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
 
     // Otherwise the kernel will be launched from cuda:0 device
@@ -786,7 +799,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
     if (max_seqlen_k > 0) {
         auto stream = at::cuda::getCurrentCUDAStream().stream();
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-        if (record_fa) {
+        if (record_fa_prepare) {
             const std::uint64_t implementation_end =
                 vllm::instrumentation::ReadCoreCycle();
             vllm::instrumentation::CommitReadCoreCycleSample(
@@ -796,7 +809,24 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
                 implementation_end);
         }
 #endif
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+        const std::uint64_t submit_group_begin =
+            record_fa_submit_group
+            ? vllm::instrumentation::ReadCoreCycle()
+            : 0;
+#endif
         run_mha_fwd(params, stream, paged_KV);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+        if (record_fa_submit_group) {
+            const std::uint64_t submit_group_end =
+                vllm::instrumentation::ReadCoreCycle();
+            vllm::instrumentation::CommitReadCoreCycleSample(
+                kRccGraphSite,
+                kRccFaSubmitGroup,
+                submit_group_begin,
+                submit_group_end);
+        }
+#endif
     } else {
         // If seqlen_k == 0, then we have an empty tensor. We need to set the output to 0.
         out.zero_();
@@ -834,6 +864,16 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
         
     }
 
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+    vllm::instrumentation::PublishReadCoreCycleTailBegin(
+        kRccGraphSite, kRccFaTail);
+    if (record_fa_total) {
+        const std::uint64_t total_end =
+            vllm::instrumentation::ReadCoreCycle();
+        vllm::instrumentation::CommitReadCoreCycleSample(
+            kRccGraphSite, kRccFaTotal, total_begin, total_end);
+    }
+#endif
     return {out, softmax_lse};
 }
 

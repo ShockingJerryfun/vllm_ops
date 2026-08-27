@@ -1,0 +1,38 @@
+diff --git a/aten/src/ATen/core/dispatch/Dispatcher.h b/aten/src/ATen/core/dispatch/Dispatcher.h
+index 8c63d66f8..000000000 100644
+--- a/aten/src/ATen/core/dispatch/Dispatcher.h
++++ b/aten/src/ATen/core/dispatch/Dispatcher.h
+@@ -16,6 +16,8 @@
+ #include <mutex>
+ #include <type_traits>
+ 
++#include "read_core_cycle_runtime.h"
++
+ #include <ATen/core/enum_tag.h>
+ #include <ATen/core/grad_mode.h>
+ 
+@@ -827,6 +829,15 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
+ #else
+-  return kernel.template call<Return, Args...>(
+-      op, dispatchKeySet, std::forward<Args>(args)...);
++  if constexpr (std::is_void_v<Return>) {
++    kernel.template call<Return, Args...>(
++        op, dispatchKeySet, std::forward<Args>(args)...);
++    vllm::instrumentation::CommitPublishedReadCoreCycleTail(700);
++    return;
++  } else {
++    decltype(auto) result = kernel.template call<Return, Args...>(
++        op, dispatchKeySet, std::forward<Args>(args)...);
++    vllm::instrumentation::CommitPublishedReadCoreCycleTail(700);
++    return result;
++  }
+ #endif // FBCODE_CAFFE2
+ }
+ 
+@@ -893,5 +904,6 @@ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
+ #endif // PYTORCH_DISABLE_PER_OP_PROFILING
+   kernel.callBoxed(op, dispatchKeySet, stack);
++  vllm::instrumentation::CommitPublishedReadCoreCycleTail(700);
+ }
+ 
+ // NB: this doesn't count as a "true" dispatcher jump, so no instrumentation

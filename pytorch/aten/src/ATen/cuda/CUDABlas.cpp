@@ -271,6 +271,7 @@ enum class RccGemmRole : std::uint16_t {
 constexpr std::uint16_t kRccGemmBackendDispatchOffset = 1;
 constexpr std::uint16_t kRccGemmLibraryPrepareOffset = 2;
 constexpr std::uint16_t kRccGemmSubmitApiOffset = 3;
+constexpr std::uint16_t kRccGemmTailOffset = 6;
 
 constexpr RccGemmRole rcc_gemm_role(int64_t m, int64_t k) {
   if (m == 6144 && k == 4096) {
@@ -1255,11 +1256,17 @@ inline void gemm_internal_cublas_half_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DTYPE(
 template <typename C_Dtype>
 inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DTYPE(at::BFloat16, C_Dtype)) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_gemm =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
   const auto gemm_role = rcc_gemm_role(m, k);
+  const bool record_gemm_prepare =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite,
+          rcc_gemm_stage(gemm_role, kRccGemmLibraryPrepareOffset));
+  const bool record_gemm_submit =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite,
+          rcc_gemm_stage(gemm_role, kRccGemmSubmitApiOffset));
   const std::uint64_t prepare_begin =
-      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_gemm_prepare ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
   cublasHandle_t handle = at::cuda::getCurrentCUDABlasHandle();
   cublasOperation_t opa = _cublasOpFromChar(transa);
@@ -1286,10 +1293,8 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
 #else
   auto compute_type = CUDA_R_32F;
 #endif
-  const cublasStatus_t math_mode_status =
-      cublasSetMathMode(handle, cublas_flags);
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_gemm) {
+  if (record_gemm_prepare) {
     const std::uint64_t prepare_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -1298,12 +1303,12 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
         prepare_begin,
         prepare_end);
   }
-#endif
-  TORCH_CUDABLAS_CHECK(math_mode_status);
-#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
   const std::uint64_t submit_begin =
-      record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
+      record_gemm_submit ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
+  const cublasStatus_t math_mode_status =
+      cublasSetMathMode(handle, cublas_flags);
+  TORCH_CUDABLAS_CHECK(math_mode_status);
   const cublasStatus_t gemm_status = cublasGemmEx(
       handle,
       opa,
@@ -1324,8 +1329,10 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
       ldc,
       compute_type,
       CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+  TORCH_CUDABLAS_CHECK(gemm_status);
+  TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  if (record_gemm) {
+  if (record_gemm_submit) {
     const std::uint64_t submit_end =
         vllm::instrumentation::ReadCoreCycle();
     vllm::instrumentation::CommitReadCoreCycleSample(
@@ -1334,9 +1341,10 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
         submit_begin,
         submit_end);
   }
+  vllm::instrumentation::PublishReadCoreCycleTailBegin(
+      kRccGraphSite,
+      rcc_gemm_stage(gemm_role, kRccGemmTailOffset));
 #endif
-  TORCH_CUDABLAS_CHECK(gemm_status);
-  TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
 }
 
 template <>
@@ -1608,9 +1616,11 @@ void gemm<at::Half>(CUDABLAS_GEMM_ARGTYPES(at::Half)) {
 template <>
 void gemm<at::BFloat16>(CUDABLAS_GEMM_ARGTYPES(at::BFloat16)) {
 #if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
-  const bool record_gemm =
-      vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite);
   const auto gemm_role = rcc_gemm_role(m, k);
+  const bool record_gemm =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite,
+          rcc_gemm_stage(gemm_role, kRccGemmBackendDispatchOffset));
   const std::uint64_t dispatch_begin =
       record_gemm ? vllm::instrumentation::ReadCoreCycle() : 0;
 #endif
