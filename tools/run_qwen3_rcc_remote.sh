@@ -117,8 +117,21 @@ docker exec \
   -e RCC_INPUT_TOKENS="${INPUT_TOKENS:-128}" \
   -e RCC_MAX_TOKENS="${MAX_TOKENS:-4}" \
   -e RCC_KV_CACHE_MEMORY_BYTES="${KV_CACHE_MEMORY_BYTES:-1258291200}" \
-  "$container" bash -lc \
-  "taskset -c $cpu python -u $root/tools/run_qwen3_rcc_measurement.py" \
+  "$container" bash -lc "
+  set -euo pipefail
+  audio_path=/opt/vllm/lib/python3.13/site-packages/torchaudio
+  audio_backup=/tmp/torchaudio.rcc.\$\$
+  restore_audio() {
+    if [ -d \"\$audio_backup\" ]; then
+      mv \"\$audio_backup\" \"\$audio_path\"
+    fi
+  }
+  trap restore_audio EXIT INT TERM
+  if [ -d \"\$audio_path\" ]; then
+    mv \"\$audio_path\" \"\$audio_backup\"
+  fi
+  taskset -c $cpu python -u $root/tools/run_qwen3_rcc_measurement.py
+  " \
   2>&1 | tee "$run_dir/model_run.log"
 
 rmmod pmccntr_el0_enable
