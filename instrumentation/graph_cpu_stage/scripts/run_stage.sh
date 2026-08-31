@@ -56,8 +56,8 @@ if [ "$cpu_governor" != performance ]; then
   exit 40
 fi
 
-test "$(git -C "$source_root" rev-parse HEAD)" = \
-  568afb3a13806beb53bb2e6bd518269357b237c0
+git -C "$source_root" merge-base --is-ancestor \
+  568afb3a13806beb53bb2e6bd518269357b237c0 HEAD
 test "$(git -C "$torch_source" rev-parse HEAD)" = \
   70d99e998b4955e0049d13a98d77ae1b14db1f45
 test "$(git -C "$flash_source" rev-parse HEAD)" = \

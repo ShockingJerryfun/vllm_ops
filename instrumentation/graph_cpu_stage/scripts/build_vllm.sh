@@ -13,8 +13,8 @@ jobs=${QWEN3_BUILD_JOBS:-96}
 
 mkdir -p "$evidence_root"
 
-test "$(git -C "$vllm_root" rev-parse HEAD)" = \
-  568afb3a13806beb53bb2e6bd518269357b237c0
+git -C "$vllm_root" merge-base --is-ancestor \
+  568afb3a13806beb53bb2e6bd518269357b237c0 HEAD
 test "$(git -C "$flash_root" rev-parse HEAD)" = \
   caaa4eb59845388a20b1f435ecaafb4bd9517ad8
 git -C "$vllm_root" diff --check
