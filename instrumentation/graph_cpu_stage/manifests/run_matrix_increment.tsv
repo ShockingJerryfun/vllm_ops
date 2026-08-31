@@ -1,0 +1,151 @@
+sequence	run_id	stage_id	stage_code	category	manifest_phase	runner_phase	stage_name
+1	stage0831run_0001_graph-prefill_stage11001	11001	ALLOC-EMPTY0-S01	allocator	graph-prefill	graph-prefill	CUDA factory入口与 options/deterministic 分支
+2	stage0831run_0002_graph-prefill_stage11002	11002	ALLOC-EMPTY0-S02	allocator	graph-prefill	graph-prefill	device/options 检查、DeviceGuard 与 allocator 选择
+3	stage0831run_0003_graph-prefill_stage11003	11003	ALLOC-EMPTY0-S03	allocator	graph-prefill	graph-prefill	size/stride 校验与 storage nbytes 计算
+4	stage0831run_0004_graph-prefill_stage11004	11004	ALLOC-EMPTY0-S04	allocator	graph-prefill	graph-prefill	StorageImpl 构造与 allocator 调用容器
+5	stage0831run_0005_graph-prefill_stage11005	11005	ALLOC-EMPTY0-S05	allocator	graph-prefill	graph-prefill	allocator device/stream 与 size==0/caching 分支
+6	stage0831run_0006_graph-prefill_stage11006	11006	ALLOC-EMPTY0-S06	allocator	graph-prefill	graph-prefill	malloc 锁、capture policy、rounding 与 AllocParams
+7	stage0831run_0007_graph-prefill_stage11007	11007	ALLOC-EMPTY0-S07	allocator	graph-prefill	graph-prefill	Graph private pool / normal pool 选择
+8	stage0831run_0008_graph-prefill_stage11008	11008	ALLOC-EMPTY0-S08	allocator	graph-prefill	graph-prefill	cache block 查找与复用资格
+9	stage0831run_0009_graph-prefill_stage11009	11009	ALLOC-EMPTY0-S09	allocator	graph-prefill	graph-prefill	cache hit/miss、split 与已找到 block 物化
+10	stage0831run_0010_graph-prefill_stage11010	11010	ALLOC-EMPTY0-S10	allocator	graph-prefill	graph-prefill	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+11	stage0831run_0011_graph-prefill_stage11011	11011	ALLOC-EMPTY0-S11	allocator	graph-prefill	graph-prefill	cudaMalloc 状态与 new Block 建立
+12	stage0831run_0012_graph-prefill_stage11012	11012	ALLOC-EMPTY0-S12	allocator	graph-prefill	graph-prefill	DataPtr、Storage 与 Tensor 返回
+13	stage0831run_0013_graph-prefill_stage11101	11101	ALLOC-DUMMY-S01	allocator	graph-prefill	graph-prefill	CUDA factory入口与 options/deterministic 分支
+14	stage0831run_0014_graph-prefill_stage11102	11102	ALLOC-DUMMY-S02	allocator	graph-prefill	graph-prefill	device/options 检查、DeviceGuard 与 allocator 选择
+15	stage0831run_0015_graph-prefill_stage11103	11103	ALLOC-DUMMY-S03	allocator	graph-prefill	graph-prefill	size/stride 校验与 storage nbytes 计算
+16	stage0831run_0016_graph-prefill_stage11104	11104	ALLOC-DUMMY-S04	allocator	graph-prefill	graph-prefill	StorageImpl 构造与 allocator 调用容器
+17	stage0831run_0017_graph-prefill_stage11105	11105	ALLOC-DUMMY-S05	allocator	graph-prefill	graph-prefill	allocator device/stream 与 size==0/caching 分支
+18	stage0831run_0018_graph-prefill_stage11106	11106	ALLOC-DUMMY-S06	allocator	graph-prefill	graph-prefill	malloc 锁、capture policy、rounding 与 AllocParams
+19	stage0831run_0019_graph-prefill_stage11107	11107	ALLOC-DUMMY-S07	allocator	graph-prefill	graph-prefill	Graph private pool / normal pool 选择
+20	stage0831run_0020_graph-prefill_stage11108	11108	ALLOC-DUMMY-S08	allocator	graph-prefill	graph-prefill	cache block 查找与复用资格
+21	stage0831run_0021_graph-prefill_stage11109	11109	ALLOC-DUMMY-S09	allocator	graph-prefill	graph-prefill	cache hit/miss、split 与已找到 block 物化
+22	stage0831run_0022_graph-prefill_stage11110	11110	ALLOC-DUMMY-S10	allocator	graph-prefill	graph-prefill	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+23	stage0831run_0023_graph-prefill_stage11111	11111	ALLOC-DUMMY-S11	allocator	graph-prefill	graph-prefill	cudaMalloc 状态与 new Block 建立
+24	stage0831run_0024_graph-prefill_stage11112	11112	ALLOC-DUMMY-S12	allocator	graph-prefill	graph-prefill	DataPtr、Storage 与 Tensor 返回
+25	stage0831run_0025_graph-prefill_stage11301	11301	ALLOC-LSE-S01	allocator	graph-prefill	graph-prefill	CUDA factory入口与 options/deterministic 分支
+26	stage0831run_0026_graph-prefill_stage11302	11302	ALLOC-LSE-S02	allocator	graph-prefill	graph-prefill	device/options 检查、DeviceGuard 与 allocator 选择
+27	stage0831run_0027_graph-prefill_stage11303	11303	ALLOC-LSE-S03	allocator	graph-prefill	graph-prefill	size/stride 校验与 storage nbytes 计算
+28	stage0831run_0028_graph-prefill_stage11304	11304	ALLOC-LSE-S04	allocator	graph-prefill	graph-prefill	StorageImpl 构造与 allocator 调用容器
+29	stage0831run_0029_graph-prefill_stage11305	11305	ALLOC-LSE-S05	allocator	graph-prefill	graph-prefill	allocator device/stream 与 size==0/caching 分支
+30	stage0831run_0030_graph-prefill_stage11306	11306	ALLOC-LSE-S06	allocator	graph-prefill	graph-prefill	malloc 锁、capture policy、rounding 与 AllocParams
+31	stage0831run_0031_graph-prefill_stage11307	11307	ALLOC-LSE-S07	allocator	graph-prefill	graph-prefill	Graph private pool / normal pool 选择
+32	stage0831run_0032_graph-prefill_stage11308	11308	ALLOC-LSE-S08	allocator	graph-prefill	graph-prefill	cache block 查找与复用资格
+33	stage0831run_0033_graph-prefill_stage11309	11309	ALLOC-LSE-S09	allocator	graph-prefill	graph-prefill	cache hit/miss、split 与已找到 block 物化
+34	stage0831run_0034_graph-prefill_stage11310	11310	ALLOC-LSE-S10	allocator	graph-prefill	graph-prefill	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+35	stage0831run_0035_graph-prefill_stage11311	11311	ALLOC-LSE-S11	allocator	graph-prefill	graph-prefill	cudaMalloc 状态与 new Block 建立
+36	stage0831run_0036_graph-prefill_stage11312	11312	ALLOC-LSE-S12	allocator	graph-prefill	graph-prefill	DataPtr、Storage 与 Tensor 返回
+37	stage0831run_0037_graph-prefill_stage11401	11401	ALLOC-P0-S01	allocator	graph-prefill	graph-prefill	CUDA factory入口与 options/deterministic 分支
+38	stage0831run_0038_graph-prefill_stage11402	11402	ALLOC-P0-S02	allocator	graph-prefill	graph-prefill	device/options 检查、DeviceGuard 与 allocator 选择
+39	stage0831run_0039_graph-prefill_stage11403	11403	ALLOC-P0-S03	allocator	graph-prefill	graph-prefill	size/stride 校验与 storage nbytes 计算
+40	stage0831run_0040_graph-prefill_stage11404	11404	ALLOC-P0-S04	allocator	graph-prefill	graph-prefill	StorageImpl 构造与 allocator 调用容器
+41	stage0831run_0041_graph-prefill_stage11405	11405	ALLOC-P0-S05	allocator	graph-prefill	graph-prefill	allocator device/stream 与 size==0/caching 分支
+42	stage0831run_0042_graph-prefill_stage11406	11406	ALLOC-P0-S06	allocator	graph-prefill	graph-prefill	malloc 锁、capture policy、rounding 与 AllocParams
+43	stage0831run_0043_graph-prefill_stage11407	11407	ALLOC-P0-S07	allocator	graph-prefill	graph-prefill	Graph private pool / normal pool 选择
+44	stage0831run_0044_graph-prefill_stage11408	11408	ALLOC-P0-S08	allocator	graph-prefill	graph-prefill	cache block 查找与复用资格
+45	stage0831run_0045_graph-prefill_stage11409	11409	ALLOC-P0-S09	allocator	graph-prefill	graph-prefill	cache hit/miss、split 与已找到 block 物化
+46	stage0831run_0046_graph-prefill_stage11410	11410	ALLOC-P0-S10	allocator	graph-prefill	graph-prefill	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+47	stage0831run_0047_graph-prefill_stage11411	11411	ALLOC-P0-S11	allocator	graph-prefill	graph-prefill	cudaMalloc 状态与 new Block 建立
+48	stage0831run_0048_graph-prefill_stage11412	11412	ALLOC-P0-S12	allocator	graph-prefill	graph-prefill	DataPtr、Storage 与 Tensor 返回
+49	stage0831run_0049_graph-prefill_stage11801	11801	FA-ZERO-COND	branch_condition	graph-prefill	graph-prefill	zero_tensors / return_softmax 条件判定
+50	stage0831run_0050_graph-prefill_stage11814	11814	FA-EMPTYK-COND	branch_condition	graph-prefill	graph-prefill	max_seqlen_k > 0 launch / empty-K fill 条件判定
+51	stage0831run_0051_graph-capture-full_stage11001	11001	ALLOC-EMPTY0-S01	allocator	graph-capture	graph-capture-full	CUDA factory入口与 options/deterministic 分支
+52	stage0831run_0052_graph-capture-full_stage11002	11002	ALLOC-EMPTY0-S02	allocator	graph-capture	graph-capture-full	device/options 检查、DeviceGuard 与 allocator 选择
+53	stage0831run_0053_graph-capture-full_stage11003	11003	ALLOC-EMPTY0-S03	allocator	graph-capture	graph-capture-full	size/stride 校验与 storage nbytes 计算
+54	stage0831run_0054_graph-capture-full_stage11004	11004	ALLOC-EMPTY0-S04	allocator	graph-capture	graph-capture-full	StorageImpl 构造与 allocator 调用容器
+55	stage0831run_0055_graph-capture-full_stage11005	11005	ALLOC-EMPTY0-S05	allocator	graph-capture	graph-capture-full	allocator device/stream 与 size==0/caching 分支
+56	stage0831run_0056_graph-capture-full_stage11006	11006	ALLOC-EMPTY0-S06	allocator	graph-capture	graph-capture-full	malloc 锁、capture policy、rounding 与 AllocParams
+57	stage0831run_0057_graph-capture-full_stage11007	11007	ALLOC-EMPTY0-S07	allocator	graph-capture	graph-capture-full	Graph private pool / normal pool 选择
+58	stage0831run_0058_graph-capture-full_stage11008	11008	ALLOC-EMPTY0-S08	allocator	graph-capture	graph-capture-full	cache block 查找与复用资格
+59	stage0831run_0059_graph-capture-full_stage11009	11009	ALLOC-EMPTY0-S09	allocator	graph-capture	graph-capture-full	cache hit/miss、split 与已找到 block 物化
+60	stage0831run_0060_graph-capture-full_stage11010	11010	ALLOC-EMPTY0-S10	allocator	graph-capture	graph-capture-full	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+61	stage0831run_0061_graph-capture-full_stage11011	11011	ALLOC-EMPTY0-S11	allocator	graph-capture	graph-capture-full	cudaMalloc 状态与 new Block 建立
+62	stage0831run_0062_graph-capture-full_stage11012	11012	ALLOC-EMPTY0-S12	allocator	graph-capture	graph-capture-full	DataPtr、Storage 与 Tensor 返回
+63	stage0831run_0063_graph-capture-full_stage11101	11101	ALLOC-DUMMY-S01	allocator	graph-capture	graph-capture-full	CUDA factory入口与 options/deterministic 分支
+64	stage0831run_0064_graph-capture-full_stage11102	11102	ALLOC-DUMMY-S02	allocator	graph-capture	graph-capture-full	device/options 检查、DeviceGuard 与 allocator 选择
+65	stage0831run_0065_graph-capture-full_stage11103	11103	ALLOC-DUMMY-S03	allocator	graph-capture	graph-capture-full	size/stride 校验与 storage nbytes 计算
+66	stage0831run_0066_graph-capture-full_stage11104	11104	ALLOC-DUMMY-S04	allocator	graph-capture	graph-capture-full	StorageImpl 构造与 allocator 调用容器
+67	stage0831run_0067_graph-capture-full_stage11105	11105	ALLOC-DUMMY-S05	allocator	graph-capture	graph-capture-full	allocator device/stream 与 size==0/caching 分支
+68	stage0831run_0068_graph-capture-full_stage11106	11106	ALLOC-DUMMY-S06	allocator	graph-capture	graph-capture-full	malloc 锁、capture policy、rounding 与 AllocParams
+69	stage0831run_0069_graph-capture-full_stage11107	11107	ALLOC-DUMMY-S07	allocator	graph-capture	graph-capture-full	Graph private pool / normal pool 选择
+70	stage0831run_0070_graph-capture-full_stage11108	11108	ALLOC-DUMMY-S08	allocator	graph-capture	graph-capture-full	cache block 查找与复用资格
+71	stage0831run_0071_graph-capture-full_stage11109	11109	ALLOC-DUMMY-S09	allocator	graph-capture	graph-capture-full	cache hit/miss、split 与已找到 block 物化
+72	stage0831run_0072_graph-capture-full_stage11110	11110	ALLOC-DUMMY-S10	allocator	graph-capture	graph-capture-full	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+73	stage0831run_0073_graph-capture-full_stage11111	11111	ALLOC-DUMMY-S11	allocator	graph-capture	graph-capture-full	cudaMalloc 状态与 new Block 建立
+74	stage0831run_0074_graph-capture-full_stage11112	11112	ALLOC-DUMMY-S12	allocator	graph-capture	graph-capture-full	DataPtr、Storage 与 Tensor 返回
+75	stage0831run_0075_graph-capture-full_stage11201	11201	ALLOC-TMP_OUT-S01	allocator	graph-capture	graph-capture-full	CUDA factory入口与 options/deterministic 分支
+76	stage0831run_0076_graph-capture-full_stage11202	11202	ALLOC-TMP_OUT-S02	allocator	graph-capture	graph-capture-full	device/options 检查、DeviceGuard 与 allocator 选择
+77	stage0831run_0077_graph-capture-full_stage11203	11203	ALLOC-TMP_OUT-S03	allocator	graph-capture	graph-capture-full	size/stride 校验与 storage nbytes 计算
+78	stage0831run_0078_graph-capture-full_stage11204	11204	ALLOC-TMP_OUT-S04	allocator	graph-capture	graph-capture-full	StorageImpl 构造与 allocator 调用容器
+79	stage0831run_0079_graph-capture-full_stage11205	11205	ALLOC-TMP_OUT-S05	allocator	graph-capture	graph-capture-full	allocator device/stream 与 size==0/caching 分支
+80	stage0831run_0080_graph-capture-full_stage11206	11206	ALLOC-TMP_OUT-S06	allocator	graph-capture	graph-capture-full	malloc 锁、capture policy、rounding 与 AllocParams
+81	stage0831run_0081_graph-capture-full_stage11207	11207	ALLOC-TMP_OUT-S07	allocator	graph-capture	graph-capture-full	Graph private pool / normal pool 选择
+82	stage0831run_0082_graph-capture-full_stage11208	11208	ALLOC-TMP_OUT-S08	allocator	graph-capture	graph-capture-full	cache block 查找与复用资格
+83	stage0831run_0083_graph-capture-full_stage11209	11209	ALLOC-TMP_OUT-S09	allocator	graph-capture	graph-capture-full	cache hit/miss、split 与已找到 block 物化
+84	stage0831run_0084_graph-capture-full_stage11210	11210	ALLOC-TMP_OUT-S10	allocator	graph-capture	graph-capture-full	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+85	stage0831run_0085_graph-capture-full_stage11211	11211	ALLOC-TMP_OUT-S11	allocator	graph-capture	graph-capture-full	cudaMalloc 状态与 new Block 建立
+86	stage0831run_0086_graph-capture-full_stage11212	11212	ALLOC-TMP_OUT-S12	allocator	graph-capture	graph-capture-full	DataPtr、Storage 与 Tensor 返回
+87	stage0831run_0087_graph-capture-full_stage11301	11301	ALLOC-LSE-S01	allocator	graph-capture	graph-capture-full	CUDA factory入口与 options/deterministic 分支
+88	stage0831run_0088_graph-capture-full_stage11302	11302	ALLOC-LSE-S02	allocator	graph-capture	graph-capture-full	device/options 检查、DeviceGuard 与 allocator 选择
+89	stage0831run_0089_graph-capture-full_stage11303	11303	ALLOC-LSE-S03	allocator	graph-capture	graph-capture-full	size/stride 校验与 storage nbytes 计算
+90	stage0831run_0090_graph-capture-full_stage11304	11304	ALLOC-LSE-S04	allocator	graph-capture	graph-capture-full	StorageImpl 构造与 allocator 调用容器
+91	stage0831run_0091_graph-capture-full_stage11305	11305	ALLOC-LSE-S05	allocator	graph-capture	graph-capture-full	allocator device/stream 与 size==0/caching 分支
+92	stage0831run_0092_graph-capture-full_stage11306	11306	ALLOC-LSE-S06	allocator	graph-capture	graph-capture-full	malloc 锁、capture policy、rounding 与 AllocParams
+93	stage0831run_0093_graph-capture-full_stage11307	11307	ALLOC-LSE-S07	allocator	graph-capture	graph-capture-full	Graph private pool / normal pool 选择
+94	stage0831run_0094_graph-capture-full_stage11308	11308	ALLOC-LSE-S08	allocator	graph-capture	graph-capture-full	cache block 查找与复用资格
+95	stage0831run_0095_graph-capture-full_stage11309	11309	ALLOC-LSE-S09	allocator	graph-capture	graph-capture-full	cache hit/miss、split 与已找到 block 物化
+96	stage0831run_0096_graph-capture-full_stage11310	11310	ALLOC-LSE-S10	allocator	graph-capture	graph-capture-full	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+97	stage0831run_0097_graph-capture-full_stage11311	11311	ALLOC-LSE-S11	allocator	graph-capture	graph-capture-full	cudaMalloc 状态与 new Block 建立
+98	stage0831run_0098_graph-capture-full_stage11312	11312	ALLOC-LSE-S12	allocator	graph-capture	graph-capture-full	DataPtr、Storage 与 Tensor 返回
+99	stage0831run_0099_graph-capture-full_stage11401	11401	ALLOC-P0-S01	allocator	graph-capture	graph-capture-full	CUDA factory入口与 options/deterministic 分支
+100	stage0831run_0100_graph-capture-full_stage11402	11402	ALLOC-P0-S02	allocator	graph-capture	graph-capture-full	device/options 检查、DeviceGuard 与 allocator 选择
+101	stage0831run_0101_graph-capture-full_stage11403	11403	ALLOC-P0-S03	allocator	graph-capture	graph-capture-full	size/stride 校验与 storage nbytes 计算
+102	stage0831run_0102_graph-capture-full_stage11404	11404	ALLOC-P0-S04	allocator	graph-capture	graph-capture-full	StorageImpl 构造与 allocator 调用容器
+103	stage0831run_0103_graph-capture-full_stage11405	11405	ALLOC-P0-S05	allocator	graph-capture	graph-capture-full	allocator device/stream 与 size==0/caching 分支
+104	stage0831run_0104_graph-capture-full_stage11406	11406	ALLOC-P0-S06	allocator	graph-capture	graph-capture-full	malloc 锁、capture policy、rounding 与 AllocParams
+105	stage0831run_0105_graph-capture-full_stage11407	11407	ALLOC-P0-S07	allocator	graph-capture	graph-capture-full	Graph private pool / normal pool 选择
+106	stage0831run_0106_graph-capture-full_stage11408	11408	ALLOC-P0-S08	allocator	graph-capture	graph-capture-full	cache block 查找与复用资格
+107	stage0831run_0107_graph-capture-full_stage11409	11409	ALLOC-P0-S09	allocator	graph-capture	graph-capture-full	cache hit/miss、split 与已找到 block 物化
+108	stage0831run_0108_graph-capture-full_stage11410	11410	ALLOC-P0-S10	allocator	graph-capture	graph-capture-full	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+109	stage0831run_0109_graph-capture-full_stage11411	11411	ALLOC-P0-S11	allocator	graph-capture	graph-capture-full	cudaMalloc 状态与 new Block 建立
+110	stage0831run_0110_graph-capture-full_stage11412	11412	ALLOC-P0-S12	allocator	graph-capture	graph-capture-full	DataPtr、Storage 与 Tensor 返回
+111	stage0831run_0111_graph-capture-full_stage11501	11501	ALLOC-LSE_ACC-S01	allocator	graph-capture	graph-capture-full	CUDA factory入口与 options/deterministic 分支
+112	stage0831run_0112_graph-capture-full_stage11502	11502	ALLOC-LSE_ACC-S02	allocator	graph-capture	graph-capture-full	device/options 检查、DeviceGuard 与 allocator 选择
+113	stage0831run_0113_graph-capture-full_stage11503	11503	ALLOC-LSE_ACC-S03	allocator	graph-capture	graph-capture-full	size/stride 校验与 storage nbytes 计算
+114	stage0831run_0114_graph-capture-full_stage11504	11504	ALLOC-LSE_ACC-S04	allocator	graph-capture	graph-capture-full	StorageImpl 构造与 allocator 调用容器
+115	stage0831run_0115_graph-capture-full_stage11505	11505	ALLOC-LSE_ACC-S05	allocator	graph-capture	graph-capture-full	allocator device/stream 与 size==0/caching 分支
+116	stage0831run_0116_graph-capture-full_stage11506	11506	ALLOC-LSE_ACC-S06	allocator	graph-capture	graph-capture-full	malloc 锁、capture policy、rounding 与 AllocParams
+117	stage0831run_0117_graph-capture-full_stage11507	11507	ALLOC-LSE_ACC-S07	allocator	graph-capture	graph-capture-full	Graph private pool / normal pool 选择
+118	stage0831run_0118_graph-capture-full_stage11508	11508	ALLOC-LSE_ACC-S08	allocator	graph-capture	graph-capture-full	cache block 查找与复用资格
+119	stage0831run_0119_graph-capture-full_stage11509	11509	ALLOC-LSE_ACC-S09	allocator	graph-capture	graph-capture-full	cache hit/miss、split 与已找到 block 物化
+120	stage0831run_0120_graph-capture-full_stage11510	11510	ALLOC-LSE_ACC-S10	allocator	graph-capture	graph-capture-full	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+121	stage0831run_0121_graph-capture-full_stage11511	11511	ALLOC-LSE_ACC-S11	allocator	graph-capture	graph-capture-full	cudaMalloc 状态与 new Block 建立
+122	stage0831run_0122_graph-capture-full_stage11512	11512	ALLOC-LSE_ACC-S12	allocator	graph-capture	graph-capture-full	DataPtr、Storage 与 Tensor 返回
+123	stage0831run_0123_graph-capture-full_stage11601	11601	ALLOC-OUT_ACC-S01	allocator	graph-capture	graph-capture-full	CUDA factory入口与 options/deterministic 分支
+124	stage0831run_0124_graph-capture-full_stage11602	11602	ALLOC-OUT_ACC-S02	allocator	graph-capture	graph-capture-full	device/options 检查、DeviceGuard 与 allocator 选择
+125	stage0831run_0125_graph-capture-full_stage11603	11603	ALLOC-OUT_ACC-S03	allocator	graph-capture	graph-capture-full	size/stride 校验与 storage nbytes 计算
+126	stage0831run_0126_graph-capture-full_stage11604	11604	ALLOC-OUT_ACC-S04	allocator	graph-capture	graph-capture-full	StorageImpl 构造与 allocator 调用容器
+127	stage0831run_0127_graph-capture-full_stage11605	11605	ALLOC-OUT_ACC-S05	allocator	graph-capture	graph-capture-full	allocator device/stream 与 size==0/caching 分支
+128	stage0831run_0128_graph-capture-full_stage11606	11606	ALLOC-OUT_ACC-S06	allocator	graph-capture	graph-capture-full	malloc 锁、capture policy、rounding 与 AllocParams
+129	stage0831run_0129_graph-capture-full_stage11607	11607	ALLOC-OUT_ACC-S07	allocator	graph-capture	graph-capture-full	Graph private pool / normal pool 选择
+130	stage0831run_0130_graph-capture-full_stage11608	11608	ALLOC-OUT_ACC-S08	allocator	graph-capture	graph-capture-full	cache block 查找与复用资格
+131	stage0831run_0131_graph-capture-full_stage11609	11609	ALLOC-OUT_ACC-S09	allocator	graph-capture	graph-capture-full	cache hit/miss、split 与已找到 block 物化
+132	stage0831run_0132_graph-capture-full_stage11610	11610	ALLOC-OUT_ACC-S10	allocator	graph-capture	graph-capture-full	new block 的 cudaMallocMaybeCapturing/cudaMalloc Runtime 提交
+133	stage0831run_0133_graph-capture-full_stage11611	11611	ALLOC-OUT_ACC-S11	allocator	graph-capture	graph-capture-full	cudaMalloc 状态与 new Block 建立
+134	stage0831run_0134_graph-capture-full_stage11612	11612	ALLOC-OUT_ACC-S12	allocator	graph-capture	graph-capture-full	DataPtr、Storage 与 Tensor 返回
+135	stage0831run_0135_graph-capture-full_stage11701	11701	COPY-S01	copy	graph-capture	graph-capture-full	copy_入口、names 与 ZeroTensor 分支
+136	stage0831run_0136_graph-capture-full_stage11702	11702	COPY-S02	copy	graph-capture	graph-capture-full	copy_impl 输入/设备/alias/quantized 早退检查
+137	stage0831run_0137_graph-capture-full_stage11703	11703	COPY-S03	copy	graph-capture	graph-capture-full	TensorIterator 构造
+138	stage0831run_0138_graph-capture-full_stage11704	11704	COPY-S04	copy	graph-capture	graph-capture-full	device type 与 copy_stub 后端选择
+139	stage0831run_0139_graph-capture-full_stage11705	11705	COPY-S05	copy	graph-capture	graph-capture-full	P2P、temporary 与 CUDA/CPU 路径选择
+140	stage0831run_0140_graph-capture-full_stage11706	11706	COPY-S06	copy	graph-capture	graph-capture-full	same-device stream 与 memcpy eligibility
+141	stage0831run_0141_graph-capture-full_stage11707	11707	COPY-S07	copy	graph-capture	graph-capture-full	cross-device event 同步准备
+142	stage0831run_0142_graph-capture-full_stage11708	11708	COPY-S08	copy	graph-capture	graph-capture-full	GPU copy dtype/variant 与参数选择
+143	stage0831run_0143_graph-capture-full_stage11709	11709	COPY-S09	copy	graph-capture	graph-capture-full	gpu_kernel 参数、vectorization 与 launch geometry
+144	stage0831run_0144_graph-capture-full_stage11710	11710	COPY-S10	copy	graph-capture	graph-capture-full	cudaMemcpyAsync/cudaMemcpyPeerAsync Runtime 提交
+145	stage0831run_0145_graph-capture-full_stage11711	11711	COPY-S11	copy	graph-capture	graph-capture-full	GPU copy kernel Runtime 提交
+146	stage0831run_0146_graph-capture-full_stage11712	11712	COPY-S12	copy	graph-capture	graph-capture-full	copy submit 状态检查
+147	stage0831run_0147_graph-capture-full_stage11713	11713	COPY-S13	copy	graph-capture	graph-capture-full	cross-device completion event 同步
+148	stage0831run_0148_graph-capture-full_stage11714	11714	COPY-S14	copy	graph-capture	graph-capture-full	copy CUDA 实现与公开 op 返回
+149	stage0831run_0149_graph-capture-full_stage11801	11801	FA-ZERO-COND	branch_condition	graph-capture	graph-capture-full	zero_tensors / return_softmax 条件判定
+150	stage0831run_0150_graph-capture-full_stage11814	11814	FA-EMPTYK-COND	branch_condition	graph-capture	graph-capture-full	max_seqlen_k > 0 launch / empty-K fill 条件判定

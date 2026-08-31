@@ -1,0 +1,509 @@
+sequence	run_id	stage_id	stage_code	category	manifest_phase	runner_phase	stage_name
+1	stage0829_0001_graph-replay_stage5200	5200	RP-TOTAL	replay_lifecycle	steady-replay	graph-replay	V2 Steady Replay Host总区间
+2	stage0829_0002_graph-replay_stage5201	5201	RP-ENTRY	replay_lifecycle	steady-replay	graph-replay	V2 Replay descriptor与Graph查找
+3	stage0829_0003_graph-replay_stage5202	5202	RP-DEBUG-ADDR	replay_lifecycle	steady-replay	graph-replay	Debug输入地址验证（V2不适用）
+4	stage0829_0004_graph-replay_stage5203	5203	RP-OFFLOAD-SYNC	replay_lifecycle	steady-replay	graph-replay	V2 Replay前offloader依赖同步
+5	stage0829_0005_graph-replay_stage5204	5204	RP-BRIDGE-TOTAL	replay_lifecycle	steady-replay	graph-replay	V2 Python→PyBind replay总调用
+6	stage0829_0006_graph-replay_stage5205	5205	RP-CPP-TOTAL	replay_lifecycle	steady-replay	graph-replay	CUDAGraph::replay总区间
+7	stage0829_0007_graph-replay_stage5206	5206	RP-STATE	replay_lifecycle	steady-replay	graph-replay	Capture状态与instantiate决策
+8	stage0829_0008_graph-replay_stage5207	5207	RP-INSTANTIATE	replay_lifecycle	steady-replay	graph-replay	稀有instantiate分支
+9	stage0829_0009_graph-replay_stage5208	5208	RP-DEVICE-GUARD	replay_lifecycle	steady-replay	graph-replay	OptionalDeviceGuard
+10	stage0829_0010_graph-replay_stage5209	5209	RP-RNG-PROLOGUE	replay_lifecycle	steady-replay	graph-replay	Generator replay_prologue
+11	stage0829_0011_graph-replay_stage5210	5210	RP-STREAM	replay_lifecycle	steady-replay	graph-replay	当前CUDA stream获取
+12	stage0829_0012_graph-replay_stage5211	5211	RP-GRAPH-LAUNCH	replay_lifecycle	steady-replay	graph-replay	cudaGraphLaunch精确Runtime API
+13	stage0829_0013_graph-replay_stage5212	5212	RP-LAUNCH-CHECK	replay_lifecycle	steady-replay	graph-replay	Launch返回状态检查
+14	stage0829_0014_graph-replay_stage5213	5213	RP-CPP-RETURN	replay_lifecycle	steady-replay	graph-replay	C++/PyBind返回尾部
+15	stage0829_0015_graph-replay_stage5214	5214	RP-OUTPUT-RETURN	replay_lifecycle	steady-replay	graph-replay	V2静态output切片与返回准备
+16	stage0829_0016_graph-prefill_stage1000	1000	OP-001	operator_total	graph-prefill	graph-prefill	triton_red_fused__to_copy_embedding_rms_norm_0 总区间
+17	stage0829_0017_graph-prefill_stage1001	1001	OP-002	operator_total	graph-prefill	graph-prefill	aten::mm CUDA out实现总区间
+18	stage0829_0018_graph-prefill_stage1002	1002	OP-003	operator_total	graph-prefill	graph-prefill	triton_red_fused_1 总区间
+19	stage0829_0019_graph-prefill_stage1003	1003	OP-004	operator_total	graph-prefill	graph-prefill	triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_2 总区间
+20	stage0829_0020_graph-prefill_stage1004	1004	OP-005	operator_total	graph-prefill	graph-prefill	triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_3 总区间
+21	stage0829_0021_graph-prefill_stage1005	1005	OP-006	operator_total	graph-prefill	graph-prefill	vllm::unified_kv_cache_update 总区间
+22	stage0829_0022_graph-prefill_stage1006	1006	OP-007	operator_total	graph-prefill	graph-prefill	aten::transpose 总区间
+23	stage0829_0023_graph-prefill_stage1007	1007	OP-008	operator_total	graph-prefill	graph-prefill	aten::as_strided [#1] 总区间
+24	stage0829_0024_graph-prefill_stage1008	1008	OP-009	operator_total	graph-prefill	graph-prefill	aten::split 总区间
+25	stage0829_0025_graph-prefill_stage1009	1009	OP-010	operator_total	graph-prefill	graph-prefill	aten::narrow [#1] 总区间
+26	stage0829_0026_graph-prefill_stage1010	1010	OP-011	operator_total	graph-prefill	graph-prefill	aten::slice [#1] 总区间
+27	stage0829_0027_graph-prefill_stage1011	1011	OP-012	operator_total	graph-prefill	graph-prefill	aten::as_strided [#2] 总区间
+28	stage0829_0028_graph-prefill_stage1012	1012	OP-013	operator_total	graph-prefill	graph-prefill	aten::narrow [#2] 总区间
+29	stage0829_0029_graph-prefill_stage1013	1013	OP-014	operator_total	graph-prefill	graph-prefill	aten::slice [#2] 总区间
+30	stage0829_0030_graph-prefill_stage1014	1014	OP-015	operator_total	graph-prefill	graph-prefill	aten::as_strided [#3] 总区间
+31	stage0829_0031_graph-prefill_stage1015	1015	OP-016	operator_total	graph-prefill	graph-prefill	_C_cache_ops::reshape_and_cache_flash 总区间
+32	stage0829_0032_graph-prefill_stage1016	1016	OP-017	operator_total	graph-prefill	graph-prefill	aten::empty 总区间
+33	stage0829_0033_graph-prefill_stage1017	1017	OP-018	operator_total	graph-prefill	graph-prefill	vllm::unified_attention_with_output 总区间
+34	stage0829_0034_graph-prefill_stage1018	1018	OP-019	operator_total	graph-prefill	graph-prefill	aten::transpose [#1] 总区间
+35	stage0829_0035_graph-prefill_stage1019	1019	OP-020	operator_total	graph-prefill	graph-prefill	aten::as_strided [#1] 总区间
+36	stage0829_0036_graph-prefill_stage1020	1020	OP-021	operator_total	graph-prefill	graph-prefill	aten::split 总区间
+37	stage0829_0037_graph-prefill_stage1021	1021	OP-022	operator_total	graph-prefill	graph-prefill	aten::narrow [#1] 总区间
+38	stage0829_0038_graph-prefill_stage1022	1022	OP-023	operator_total	graph-prefill	graph-prefill	aten::slice [#1] 总区间
+39	stage0829_0039_graph-prefill_stage1023	1023	OP-024	operator_total	graph-prefill	graph-prefill	aten::as_strided [#2] 总区间
+40	stage0829_0040_graph-prefill_stage1024	1024	OP-025	operator_total	graph-prefill	graph-prefill	aten::narrow [#2] 总区间
+41	stage0829_0041_graph-prefill_stage1025	1025	OP-026	operator_total	graph-prefill	graph-prefill	aten::slice [#2] 总区间
+42	stage0829_0042_graph-prefill_stage1026	1026	OP-027	operator_total	graph-prefill	graph-prefill	aten::as_strided [#3] 总区间
+43	stage0829_0043_graph-prefill_stage1027	1027	OP-028	operator_total	graph-prefill	graph-prefill	aten::expand [#1] 总区间
+44	stage0829_0044_graph-prefill_stage1028	1028	OP-029	operator_total	graph-prefill	graph-prefill	aten::as_strided [#4] 总区间
+45	stage0829_0045_graph-prefill_stage1029	1029	OP-030	operator_total	graph-prefill	graph-prefill	aten::expand [#2] 总区间
+46	stage0829_0046_graph-prefill_stage1030	1030	OP-031	operator_total	graph-prefill	graph-prefill	aten::as_strided [#5] 总区间
+47	stage0829_0047_graph-prefill_stage1031	1031	OP-032	operator_total	graph-prefill	graph-prefill	aten::expand [#3] 总区间
+48	stage0829_0048_graph-prefill_stage1032	1032	OP-033	operator_total	graph-prefill	graph-prefill	aten::as_strided [#6] 总区间
+49	stage0829_0049_graph-prefill_stage1033	1033	OP-034	operator_total	graph-prefill	graph-prefill	aten::slice [#3] 总区间
+50	stage0829_0050_graph-prefill_stage1034	1034	OP-035	operator_total	graph-prefill	graph-prefill	aten::as_strided [#7] 总区间
+51	stage0829_0051_graph-prefill_stage1035	1035	OP-036	operator_total	graph-prefill	graph-prefill	aten::slice [#4] 总区间
+52	stage0829_0052_graph-prefill_stage1036	1036	OP-037	operator_total	graph-prefill	graph-prefill	aten::as_strided [#8] 总区间
+53	stage0829_0053_graph-prefill_stage1037	1037	OP-038	operator_total	graph-prefill	graph-prefill	aten::empty_like [#1] 总区间
+54	stage0829_0054_graph-prefill_stage1038	1038	OP-039	operator_total	graph-prefill	graph-prefill	aten::empty_strided [#1] 总区间
+55	stage0829_0055_graph-prefill_stage1039	1039	OP-040	operator_total	graph-prefill	graph-prefill	_vllm_fa2_C::varlen_fwd 总区间
+56	stage0829_0056_graph-prefill_stage1048	1048	OP-049	operator_total	graph-prefill	graph-prefill	aten::empty [#1] 总区间
+57	stage0829_0057_graph-prefill_stage1049	1049	OP-050	operator_total	graph-prefill	graph-prefill	aten::empty [#2] 总区间
+58	stage0829_0058_graph-prefill_stage1060	1060	OP-061	operator_total	graph-prefill	graph-prefill	aten::mm CUDA out实现总区间
+59	stage0829_0059_graph-prefill_stage1061	1061	OP-062	operator_total	graph-prefill	graph-prefill	triton_red_fused_fused_add_rms_norm_0 总区间
+60	stage0829_0060_graph-prefill_stage1062	1062	OP-063	operator_total	graph-prefill	graph-prefill	aten::mm CUDA out实现总区间
+61	stage0829_0061_graph-prefill_stage1063	1063	OP-064	operator_total	graph-prefill	graph-prefill	triton_poi_fused_mul_silu_slice_1 总区间
+62	stage0829_0062_graph-prefill_stage1064	1064	OP-065	operator_total	graph-prefill	graph-prefill	aten::mm CUDA out实现总区间
+63	stage0829_0063_graph-prefill_stage1065	1065	OP-066	operator_total	graph-prefill	graph-prefill	triton_red_fused_fused_add_rms_norm_2 总区间
+64	stage0829_0064_graph-prefill_stage1066	1066	OP-067	operator_total	graph-prefill	graph-prefill	aten::mm CUDA out实现总区间
+65	stage0829_0065_graph-prefill_stage1067	1067	OP-068	operator_total	graph-prefill	graph-prefill	triton_red_fused_3 总区间
+66	stage0829_0066_graph-prefill_stage1068	1068	OP-069	operator_total	graph-prefill	graph-prefill	triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_4 总区间
+67	stage0829_0067_graph-prefill_stage1069	1069	OP-070	operator_total	graph-prefill	graph-prefill	triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_5 总区间
+68	stage0829_0068_graph-prefill_stage1070	1070	OP-071	operator_total	graph-prefill	graph-prefill	triton_red_fused_fused_add_rms_norm_2 总区间
+69	stage0829_0069_graph-prefill_stage5100	5100	GP-TOTAL	prefill_lifecycle	graph-prefill	graph-prefill	V2 Graph Prefill模型下发总区间
+70	stage0829_0070_graph-prefill_stage5101	5101	GP-MODE	prefill_lifecycle	graph-prefill	graph-prefill	Prefill模式分支与forward context进入
+71	stage0829_0071_graph-prefill_stage5102	5102	GP-MODEL-BODY	prefill_lifecycle	graph-prefill	graph-prefill	Prefill Qwen3模型体
+72	stage0829_0072_graph-prefill_stage5103	5103	GP-RETURN	prefill_lifecycle	graph-prefill	graph-prefill	Prefill forward context退出尾部
+73	stage0829_0073_graph-prefill_stage6101	6101	GEMM-QKV-S01	gemm	graph-prefill	graph-prefill	输入/shape/device检查
+74	stage0829_0074_graph-prefill_stage6102	6102	GEMM-QKV-S02	gemm	graph-prefill	graph-prefill	后端、输出与空输入分支选择
+75	stage0829_0075_graph-prefill_stage6103	6103	GEMM-QKV-S03	gemm	graph-prefill	graph-prefill	布局与leading-dimension构造
+76	stage0829_0076_graph-prefill_stage6104	6104	GEMM-QKV-S04	gemm	graph-prefill	graph-prefill	dtype模板与后端分派容器
+77	stage0829_0077_graph-prefill_stage6105	6105	GEMM-QKV-S05	gemm	graph-prefill	graph-prefill	cuBLAS handle获取
+78	stage0829_0078_graph-prefill_stage6106	6106	GEMM-QKV-S06	gemm	graph-prefill	graph-prefill	op/ld/scale/math参数准备
+79	stage0829_0079_graph-prefill_stage6107	6107	GEMM-QKV-S07	gemm	graph-prefill	graph-prefill	cublasSetMathMode Host API
+80	stage0829_0080_graph-prefill_stage6108	6108	GEMM-QKV-S08	gemm	graph-prefill	graph-prefill	Math mode状态检查
+81	stage0829_0081_graph-prefill_stage6109	6109	GEMM-QKV-S09	gemm	graph-prefill	graph-prefill	cublasGemmEx Host API
+82	stage0829_0082_graph-prefill_stage6110	6110	GEMM-QKV-S10	gemm	graph-prefill	graph-prefill	GEMM返回状态检查
+83	stage0829_0083_graph-prefill_stage6111	6111	GEMM-QKV-S11	gemm	graph-prefill	graph-prefill	Math mode恢复API与检查
+84	stage0829_0084_graph-prefill_stage6112	6112	GEMM-QKV-S12	gemm	graph-prefill	graph-prefill	实现返回尾部/epilogue/copy
+85	stage0829_0085_graph-prefill_stage6201	6201	GEMM-OPROJ-S01	gemm	graph-prefill	graph-prefill	输入/shape/device检查
+86	stage0829_0086_graph-prefill_stage6202	6202	GEMM-OPROJ-S02	gemm	graph-prefill	graph-prefill	后端、输出与空输入分支选择
+87	stage0829_0087_graph-prefill_stage6203	6203	GEMM-OPROJ-S03	gemm	graph-prefill	graph-prefill	布局与leading-dimension构造
+88	stage0829_0088_graph-prefill_stage6204	6204	GEMM-OPROJ-S04	gemm	graph-prefill	graph-prefill	dtype模板与后端分派容器
+89	stage0829_0089_graph-prefill_stage6205	6205	GEMM-OPROJ-S05	gemm	graph-prefill	graph-prefill	cuBLAS handle获取
+90	stage0829_0090_graph-prefill_stage6206	6206	GEMM-OPROJ-S06	gemm	graph-prefill	graph-prefill	op/ld/scale/math参数准备
+91	stage0829_0091_graph-prefill_stage6207	6207	GEMM-OPROJ-S07	gemm	graph-prefill	graph-prefill	cublasSetMathMode Host API
+92	stage0829_0092_graph-prefill_stage6208	6208	GEMM-OPROJ-S08	gemm	graph-prefill	graph-prefill	Math mode状态检查
+93	stage0829_0093_graph-prefill_stage6209	6209	GEMM-OPROJ-S09	gemm	graph-prefill	graph-prefill	cublasGemmEx Host API
+94	stage0829_0094_graph-prefill_stage6210	6210	GEMM-OPROJ-S10	gemm	graph-prefill	graph-prefill	GEMM返回状态检查
+95	stage0829_0095_graph-prefill_stage6211	6211	GEMM-OPROJ-S11	gemm	graph-prefill	graph-prefill	Math mode恢复API与检查
+96	stage0829_0096_graph-prefill_stage6212	6212	GEMM-OPROJ-S12	gemm	graph-prefill	graph-prefill	实现返回尾部/epilogue/copy
+97	stage0829_0097_graph-prefill_stage6301	6301	GEMM-GATEUP-S01	gemm	graph-prefill	graph-prefill	输入/shape/device检查
+98	stage0829_0098_graph-prefill_stage6302	6302	GEMM-GATEUP-S02	gemm	graph-prefill	graph-prefill	后端、输出与空输入分支选择
+99	stage0829_0099_graph-prefill_stage6303	6303	GEMM-GATEUP-S03	gemm	graph-prefill	graph-prefill	布局与leading-dimension构造
+100	stage0829_0100_graph-prefill_stage6304	6304	GEMM-GATEUP-S04	gemm	graph-prefill	graph-prefill	dtype模板与后端分派容器
+101	stage0829_0101_graph-prefill_stage6305	6305	GEMM-GATEUP-S05	gemm	graph-prefill	graph-prefill	cuBLAS handle获取
+102	stage0829_0102_graph-prefill_stage6306	6306	GEMM-GATEUP-S06	gemm	graph-prefill	graph-prefill	op/ld/scale/math参数准备
+103	stage0829_0103_graph-prefill_stage6307	6307	GEMM-GATEUP-S07	gemm	graph-prefill	graph-prefill	cublasSetMathMode Host API
+104	stage0829_0104_graph-prefill_stage6308	6308	GEMM-GATEUP-S08	gemm	graph-prefill	graph-prefill	Math mode状态检查
+105	stage0829_0105_graph-prefill_stage6309	6309	GEMM-GATEUP-S09	gemm	graph-prefill	graph-prefill	cublasGemmEx Host API
+106	stage0829_0106_graph-prefill_stage6310	6310	GEMM-GATEUP-S10	gemm	graph-prefill	graph-prefill	GEMM返回状态检查
+107	stage0829_0107_graph-prefill_stage6311	6311	GEMM-GATEUP-S11	gemm	graph-prefill	graph-prefill	Math mode恢复API与检查
+108	stage0829_0108_graph-prefill_stage6312	6312	GEMM-GATEUP-S12	gemm	graph-prefill	graph-prefill	实现返回尾部/epilogue/copy
+109	stage0829_0109_graph-prefill_stage6401	6401	GEMM-DOWN-S01	gemm	graph-prefill	graph-prefill	输入/shape/device检查
+110	stage0829_0110_graph-prefill_stage6402	6402	GEMM-DOWN-S02	gemm	graph-prefill	graph-prefill	后端、输出与空输入分支选择
+111	stage0829_0111_graph-prefill_stage6403	6403	GEMM-DOWN-S03	gemm	graph-prefill	graph-prefill	布局与leading-dimension构造
+112	stage0829_0112_graph-prefill_stage6404	6404	GEMM-DOWN-S04	gemm	graph-prefill	graph-prefill	dtype模板与后端分派容器
+113	stage0829_0113_graph-prefill_stage6405	6405	GEMM-DOWN-S05	gemm	graph-prefill	graph-prefill	cuBLAS handle获取
+114	stage0829_0114_graph-prefill_stage6406	6406	GEMM-DOWN-S06	gemm	graph-prefill	graph-prefill	op/ld/scale/math参数准备
+115	stage0829_0115_graph-prefill_stage6407	6407	GEMM-DOWN-S07	gemm	graph-prefill	graph-prefill	cublasSetMathMode Host API
+116	stage0829_0116_graph-prefill_stage6408	6408	GEMM-DOWN-S08	gemm	graph-prefill	graph-prefill	Math mode状态检查
+117	stage0829_0117_graph-prefill_stage6409	6409	GEMM-DOWN-S09	gemm	graph-prefill	graph-prefill	cublasGemmEx Host API
+118	stage0829_0118_graph-prefill_stage6410	6410	GEMM-DOWN-S10	gemm	graph-prefill	graph-prefill	GEMM返回状态检查
+119	stage0829_0119_graph-prefill_stage6411	6411	GEMM-DOWN-S11	gemm	graph-prefill	graph-prefill	Math mode恢复API与检查
+120	stage0829_0120_graph-prefill_stage6412	6412	GEMM-DOWN-S12	gemm	graph-prefill	graph-prefill	实现返回尾部/epilogue/copy
+121	stage0829_0121_graph-prefill_stage7601	7601	KV-S01	kv_flash	graph-prefill	graph-prefill	shape元数据读取
+122	stage0829_0122_graph-prefill_stage7602	7602	KV-S02	kv_flash	graph-prefill	graph-prefill	DeviceGuard
+123	stage0829_0123_graph-prefill_stage7603	7603	KV-S03	kv_flash	graph-prefill	graph-prefill	当前CUDA stream获取
+124	stage0829_0124_graph-prefill_stage7604	7604	KV-S04	kv_flash	graph-prefill	graph-prefill	KV cache dtype路径选择
+125	stage0829_0125_graph-prefill_stage7605	7605	KV-S05	kv_flash	graph-prefill	graph-prefill	stride/scale检查与参数打包
+126	stage0829_0126_graph-prefill_stage7606	7606	KV-S06	kv_flash	graph-prefill	graph-prefill	Grid/Block geometry
+127	stage0829_0127_graph-prefill_stage7607	7607	KV-S07	kv_flash	graph-prefill	graph-prefill	KV/cache dtype模板分派
+128	stage0829_0128_graph-prefill_stage7608	7608	KV-S08	kv_flash	graph-prefill	graph-prefill	cudaLaunchKernel精确Runtime API
+129	stage0829_0129_graph-prefill_stage7609	7609	KV-S09	kv_flash	graph-prefill	graph-prefill	返回尾部
+130	stage0829_0130_graph-prefill_stage8001	8001	FA-S01	kv_flash	graph-prefill	graph-prefill	Device/能力/dtype/contiguous验证
+131	stage0829_0131_graph-prefill_stage8002	8002	FA-S02	kv_flash	graph-prefill	graph-prefill	shape/paged-KV/window分支容器
+132	stage0829_0132_graph-prefill_stage8003	8003	FA-S03	kv_flash	graph-prefill	graph-prefill	Decode Q relayout决策与view链
+133	stage0829_0133_graph-prefill_stage8004	8004	FA-S04	kv_flash	graph-prefill	graph-prefill	输出/辅助Tensor分配与可选zero
+134	stage0829_0134_graph-prefill_stage8005	8005	FA-S05	kv_flash	graph-prefill	graph-prefill	Flash_fwd_params主参数打包
+135	stage0829_0135_graph-prefill_stage8006	8006	FA-S06	kv_flash	graph-prefill	graph-prefill	split-KV调度与累加buffer
+136	stage0829_0136_graph-prefill_stage8007	8007	FA-S07	kv_flash	graph-prefill	graph-prefill	leftpad/alibi可选参数配置
+137	stage0829_0137_graph-prefill_stage8008	8008	FA-S08	kv_flash	graph-prefill	graph-prefill	当前CUDA stream获取
+138	stage0829_0138_graph-prefill_stage8009	8009	FA-S09	kv_flash	graph-prefill	graph-prefill	dtype/head/causal/split模板分派
+139	stage0829_0139_graph-prefill_stage8010	8010	FA-S10	kv_flash	graph-prefill	graph-prefill	Primary geometry/kernel pointer/属性准备
+140	stage0829_0140_graph-prefill_stage8011	8011	FA-S11	kv_flash	graph-prefill	graph-prefill	Primary cudaLaunchKernel Host API
+141	stage0829_0141_graph-prefill_stage8012	8012	FA-S12	kv_flash	graph-prefill	graph-prefill	Primary post-launch状态检查
+142	stage0829_0142_graph-prefill_stage8013	8013	FA-S13	kv_flash	graph-prefill	graph-prefill	Combine分支/grid/模板选择
+143	stage0829_0143_graph-prefill_stage8014	8014	FA-S14	kv_flash	graph-prefill	graph-prefill	Combine cudaLaunchKernel Host API
+144	stage0829_0144_graph-prefill_stage8015	8015	FA-S15	kv_flash	graph-prefill	graph-prefill	Combine post-launch状态检查
+145	stage0829_0145_graph-prefill_stage8016	8016	FA-S16	kv_flash	graph-prefill	graph-prefill	提交后relayout/copy/LSE布局
+146	stage0829_0146_graph-prefill_stage8017	8017	FA-S17	kv_flash	graph-prefill	graph-prefill	C++返回尾部
+147	stage0829_0147_graph-prefill_stage9001	9001	TRI-EMBED-NORM-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+148	stage0829_0148_graph-prefill_stage9002	9002	TRI-EMBED-NORM-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+149	stage0829_0149_graph-prefill_stage9003	9003	TRI-EMBED-NORM-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+150	stage0829_0150_graph-prefill_stage9004	9004	TRI-EMBED-NORM-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+151	stage0829_0151_graph-prefill_stage9005	9005	TRI-EMBED-NORM-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+152	stage0829_0152_graph-prefill_stage9006	9006	TRI-EMBED-NORM-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+153	stage0829_0153_graph-prefill_stage9007	9007	TRI-EMBED-NORM-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+154	stage0829_0154_graph-prefill_stage9008	9008	TRI-EMBED-NORM-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+155	stage0829_0155_graph-prefill_stage9009	9009	TRI-EMBED-NORM-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+156	stage0829_0156_graph-prefill_stage9101	9101	TRI-L0-QK-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+157	stage0829_0157_graph-prefill_stage9102	9102	TRI-L0-QK-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+158	stage0829_0158_graph-prefill_stage9103	9103	TRI-L0-QK-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+159	stage0829_0159_graph-prefill_stage9104	9104	TRI-L0-QK-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+160	stage0829_0160_graph-prefill_stage9105	9105	TRI-L0-QK-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+161	stage0829_0161_graph-prefill_stage9106	9106	TRI-L0-QK-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+162	stage0829_0162_graph-prefill_stage9107	9107	TRI-L0-QK-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+163	stage0829_0163_graph-prefill_stage9108	9108	TRI-L0-QK-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+164	stage0829_0164_graph-prefill_stage9109	9109	TRI-L0-QK-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+165	stage0829_0165_graph-prefill_stage9201	9201	TRI-L0-KROPE-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+166	stage0829_0166_graph-prefill_stage9202	9202	TRI-L0-KROPE-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+167	stage0829_0167_graph-prefill_stage9203	9203	TRI-L0-KROPE-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+168	stage0829_0168_graph-prefill_stage9204	9204	TRI-L0-KROPE-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+169	stage0829_0169_graph-prefill_stage9205	9205	TRI-L0-KROPE-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+170	stage0829_0170_graph-prefill_stage9206	9206	TRI-L0-KROPE-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+171	stage0829_0171_graph-prefill_stage9207	9207	TRI-L0-KROPE-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+172	stage0829_0172_graph-prefill_stage9208	9208	TRI-L0-KROPE-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+173	stage0829_0173_graph-prefill_stage9209	9209	TRI-L0-KROPE-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+174	stage0829_0174_graph-prefill_stage9301	9301	TRI-L0-QROPE-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+175	stage0829_0175_graph-prefill_stage9302	9302	TRI-L0-QROPE-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+176	stage0829_0176_graph-prefill_stage9303	9303	TRI-L0-QROPE-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+177	stage0829_0177_graph-prefill_stage9304	9304	TRI-L0-QROPE-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+178	stage0829_0178_graph-prefill_stage9305	9305	TRI-L0-QROPE-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+179	stage0829_0179_graph-prefill_stage9306	9306	TRI-L0-QROPE-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+180	stage0829_0180_graph-prefill_stage9307	9307	TRI-L0-QROPE-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+181	stage0829_0181_graph-prefill_stage9308	9308	TRI-L0-QROPE-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+182	stage0829_0182_graph-prefill_stage9309	9309	TRI-L0-QROPE-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+183	stage0829_0183_graph-prefill_stage9401	9401	TRI-REP-QK-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+184	stage0829_0184_graph-prefill_stage9402	9402	TRI-REP-QK-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+185	stage0829_0185_graph-prefill_stage9403	9403	TRI-REP-QK-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+186	stage0829_0186_graph-prefill_stage9404	9404	TRI-REP-QK-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+187	stage0829_0187_graph-prefill_stage9405	9405	TRI-REP-QK-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+188	stage0829_0188_graph-prefill_stage9406	9406	TRI-REP-QK-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+189	stage0829_0189_graph-prefill_stage9407	9407	TRI-REP-QK-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+190	stage0829_0190_graph-prefill_stage9408	9408	TRI-REP-QK-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+191	stage0829_0191_graph-prefill_stage9409	9409	TRI-REP-QK-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+192	stage0829_0192_graph-prefill_stage9501	9501	TRI-REP-KROPE-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+193	stage0829_0193_graph-prefill_stage9502	9502	TRI-REP-KROPE-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+194	stage0829_0194_graph-prefill_stage9503	9503	TRI-REP-KROPE-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+195	stage0829_0195_graph-prefill_stage9504	9504	TRI-REP-KROPE-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+196	stage0829_0196_graph-prefill_stage9505	9505	TRI-REP-KROPE-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+197	stage0829_0197_graph-prefill_stage9506	9506	TRI-REP-KROPE-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+198	stage0829_0198_graph-prefill_stage9507	9507	TRI-REP-KROPE-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+199	stage0829_0199_graph-prefill_stage9508	9508	TRI-REP-KROPE-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+200	stage0829_0200_graph-prefill_stage9509	9509	TRI-REP-KROPE-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+201	stage0829_0201_graph-prefill_stage9601	9601	TRI-REP-QROPE-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+202	stage0829_0202_graph-prefill_stage9602	9602	TRI-REP-QROPE-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+203	stage0829_0203_graph-prefill_stage9603	9603	TRI-REP-QROPE-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+204	stage0829_0204_graph-prefill_stage9604	9604	TRI-REP-QROPE-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+205	stage0829_0205_graph-prefill_stage9605	9605	TRI-REP-QROPE-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+206	stage0829_0206_graph-prefill_stage9606	9606	TRI-REP-QROPE-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+207	stage0829_0207_graph-prefill_stage9607	9607	TRI-REP-QROPE-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+208	stage0829_0208_graph-prefill_stage9608	9608	TRI-REP-QROPE-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+209	stage0829_0209_graph-prefill_stage9609	9609	TRI-REP-QROPE-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+210	stage0829_0210_graph-prefill_stage9701	9701	TRI-ATTN-RES-NORM-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+211	stage0829_0211_graph-prefill_stage9702	9702	TRI-ATTN-RES-NORM-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+212	stage0829_0212_graph-prefill_stage9703	9703	TRI-ATTN-RES-NORM-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+213	stage0829_0213_graph-prefill_stage9704	9704	TRI-ATTN-RES-NORM-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+214	stage0829_0214_graph-prefill_stage9705	9705	TRI-ATTN-RES-NORM-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+215	stage0829_0215_graph-prefill_stage9706	9706	TRI-ATTN-RES-NORM-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+216	stage0829_0216_graph-prefill_stage9707	9707	TRI-ATTN-RES-NORM-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+217	stage0829_0217_graph-prefill_stage9708	9708	TRI-ATTN-RES-NORM-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+218	stage0829_0218_graph-prefill_stage9709	9709	TRI-ATTN-RES-NORM-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+219	stage0829_0219_graph-prefill_stage9801	9801	TRI-SILU-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+220	stage0829_0220_graph-prefill_stage9802	9802	TRI-SILU-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+221	stage0829_0221_graph-prefill_stage9803	9803	TRI-SILU-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+222	stage0829_0222_graph-prefill_stage9804	9804	TRI-SILU-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+223	stage0829_0223_graph-prefill_stage9805	9805	TRI-SILU-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+224	stage0829_0224_graph-prefill_stage9806	9806	TRI-SILU-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+225	stage0829_0225_graph-prefill_stage9807	9807	TRI-SILU-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+226	stage0829_0226_graph-prefill_stage9808	9808	TRI-SILU-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+227	stage0829_0227_graph-prefill_stage9809	9809	TRI-SILU-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+228	stage0829_0228_graph-prefill_stage9901	9901	TRI-DOWN-RES-NORM-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+229	stage0829_0229_graph-prefill_stage9902	9902	TRI-DOWN-RES-NORM-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+230	stage0829_0230_graph-prefill_stage9903	9903	TRI-DOWN-RES-NORM-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+231	stage0829_0231_graph-prefill_stage9904	9904	TRI-DOWN-RES-NORM-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+232	stage0829_0232_graph-prefill_stage9905	9905	TRI-DOWN-RES-NORM-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+233	stage0829_0233_graph-prefill_stage9906	9906	TRI-DOWN-RES-NORM-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+234	stage0829_0234_graph-prefill_stage9907	9907	TRI-DOWN-RES-NORM-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+235	stage0829_0235_graph-prefill_stage9908	9908	TRI-DOWN-RES-NORM-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+236	stage0829_0236_graph-prefill_stage9909	9909	TRI-DOWN-RES-NORM-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+237	stage0829_0237_graph-prefill_stage10001	10001	TRI-FINAL-NORM-S01	triton	graph-prefill	graph-prefill	固定参数解析与grid合法性
+238	stage0829_0238_graph-prefill_stage10002	10002	TRI-FINAL-NORM-S02	triton	graph-prefill	graph-prefill	当前CUDA Context查询
+239	stage0829_0239_graph-prefill_stage10003	10003	TRI-FINAL-NORM-S03	triton	graph-prefill	graph-prefill	CUDA Context稀有初始化分支
+240	stage0829_0240_graph-prefill_stage10004	10004	TRI-FINAL-NORM-S04	triton	graph-prefill	graph-prefill	function/stream/arg-count物化
+241	stage0829_0241_graph-prefill_stage10005	10005	TRI-FINAL-NORM-S05	triton	graph-prefill	graph-prefill	Kernel参数存储与void**数组构造
+242	stage0829_0242_graph-prefill_stage10006	10006	TRI-FINAL-NORM-S06	triton	graph-prefill	graph-prefill	Block geometry物化
+243	stage0829_0243_graph-prefill_stage10007	10007	TRI-FINAL-NORM-S07	triton	graph-prefill	graph-prefill	cuLaunchKernel精确Driver API
+244	stage0829_0244_graph-prefill_stage10008	10008	TRI-FINAL-NORM-S08	triton	graph-prefill	graph-prefill	Driver返回状态检查
+245	stage0829_0245_graph-prefill_stage10009	10009	TRI-FINAL-NORM-S09	triton	graph-prefill	graph-prefill	Python扩展返回尾部
+246	stage0829_0246_graph-capture-full_stage1000	1000	OP-001	operator_total	graph-capture	graph-capture-full	triton_red_fused__to_copy_embedding_rms_norm_0 总区间
+247	stage0829_0247_graph-capture-full_stage1001	1001	OP-002	operator_total	graph-capture	graph-capture-full	aten::mm CUDA out实现总区间
+248	stage0829_0248_graph-capture-full_stage1002	1002	OP-003	operator_total	graph-capture	graph-capture-full	triton_red_fused_1 总区间
+249	stage0829_0249_graph-capture-full_stage1003	1003	OP-004	operator_total	graph-capture	graph-capture-full	triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_2 总区间
+250	stage0829_0250_graph-capture-full_stage1004	1004	OP-005	operator_total	graph-capture	graph-capture-full	triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_3 总区间
+251	stage0829_0251_graph-capture-full_stage1005	1005	OP-006	operator_total	graph-capture	graph-capture-full	vllm::unified_kv_cache_update 总区间
+252	stage0829_0252_graph-capture-full_stage1006	1006	OP-007	operator_total	graph-capture	graph-capture-full	aten::transpose 总区间
+253	stage0829_0253_graph-capture-full_stage1007	1007	OP-008	operator_total	graph-capture	graph-capture-full	aten::as_strided [#1] 总区间
+254	stage0829_0254_graph-capture-full_stage1008	1008	OP-009	operator_total	graph-capture	graph-capture-full	aten::split 总区间
+255	stage0829_0255_graph-capture-full_stage1009	1009	OP-010	operator_total	graph-capture	graph-capture-full	aten::narrow [#1] 总区间
+256	stage0829_0256_graph-capture-full_stage1010	1010	OP-011	operator_total	graph-capture	graph-capture-full	aten::slice [#1] 总区间
+257	stage0829_0257_graph-capture-full_stage1011	1011	OP-012	operator_total	graph-capture	graph-capture-full	aten::as_strided [#2] 总区间
+258	stage0829_0258_graph-capture-full_stage1012	1012	OP-013	operator_total	graph-capture	graph-capture-full	aten::narrow [#2] 总区间
+259	stage0829_0259_graph-capture-full_stage1013	1013	OP-014	operator_total	graph-capture	graph-capture-full	aten::slice [#2] 总区间
+260	stage0829_0260_graph-capture-full_stage1014	1014	OP-015	operator_total	graph-capture	graph-capture-full	aten::as_strided [#3] 总区间
+261	stage0829_0261_graph-capture-full_stage1015	1015	OP-016	operator_total	graph-capture	graph-capture-full	_C_cache_ops::reshape_and_cache_flash 总区间
+262	stage0829_0262_graph-capture-full_stage1016	1016	OP-017	operator_total	graph-capture	graph-capture-full	aten::empty 总区间
+263	stage0829_0263_graph-capture-full_stage1017	1017	OP-018	operator_total	graph-capture	graph-capture-full	vllm::unified_attention_with_output 总区间
+264	stage0829_0264_graph-capture-full_stage1018	1018	OP-019	operator_total	graph-capture	graph-capture-full	aten::transpose [#1] 总区间
+265	stage0829_0265_graph-capture-full_stage1019	1019	OP-020	operator_total	graph-capture	graph-capture-full	aten::as_strided [#1] 总区间
+266	stage0829_0266_graph-capture-full_stage1020	1020	OP-021	operator_total	graph-capture	graph-capture-full	aten::split 总区间
+267	stage0829_0267_graph-capture-full_stage1021	1021	OP-022	operator_total	graph-capture	graph-capture-full	aten::narrow [#1] 总区间
+268	stage0829_0268_graph-capture-full_stage1022	1022	OP-023	operator_total	graph-capture	graph-capture-full	aten::slice [#1] 总区间
+269	stage0829_0269_graph-capture-full_stage1023	1023	OP-024	operator_total	graph-capture	graph-capture-full	aten::as_strided [#2] 总区间
+270	stage0829_0270_graph-capture-full_stage1024	1024	OP-025	operator_total	graph-capture	graph-capture-full	aten::narrow [#2] 总区间
+271	stage0829_0271_graph-capture-full_stage1025	1025	OP-026	operator_total	graph-capture	graph-capture-full	aten::slice [#2] 总区间
+272	stage0829_0272_graph-capture-full_stage1026	1026	OP-027	operator_total	graph-capture	graph-capture-full	aten::as_strided [#3] 总区间
+273	stage0829_0273_graph-capture-full_stage1027	1027	OP-028	operator_total	graph-capture	graph-capture-full	aten::expand [#1] 总区间
+274	stage0829_0274_graph-capture-full_stage1028	1028	OP-029	operator_total	graph-capture	graph-capture-full	aten::as_strided [#4] 总区间
+275	stage0829_0275_graph-capture-full_stage1029	1029	OP-030	operator_total	graph-capture	graph-capture-full	aten::expand [#2] 总区间
+276	stage0829_0276_graph-capture-full_stage1030	1030	OP-031	operator_total	graph-capture	graph-capture-full	aten::as_strided [#5] 总区间
+277	stage0829_0277_graph-capture-full_stage1031	1031	OP-032	operator_total	graph-capture	graph-capture-full	aten::expand [#3] 总区间
+278	stage0829_0278_graph-capture-full_stage1032	1032	OP-033	operator_total	graph-capture	graph-capture-full	aten::as_strided [#6] 总区间
+279	stage0829_0279_graph-capture-full_stage1033	1033	OP-034	operator_total	graph-capture	graph-capture-full	aten::slice [#3] 总区间
+280	stage0829_0280_graph-capture-full_stage1034	1034	OP-035	operator_total	graph-capture	graph-capture-full	aten::as_strided [#7] 总区间
+281	stage0829_0281_graph-capture-full_stage1035	1035	OP-036	operator_total	graph-capture	graph-capture-full	aten::slice [#4] 总区间
+282	stage0829_0282_graph-capture-full_stage1036	1036	OP-037	operator_total	graph-capture	graph-capture-full	aten::as_strided [#8] 总区间
+283	stage0829_0283_graph-capture-full_stage1037	1037	OP-038	operator_total	graph-capture	graph-capture-full	aten::empty_like [#1] 总区间
+284	stage0829_0284_graph-capture-full_stage1038	1038	OP-039	operator_total	graph-capture	graph-capture-full	aten::empty_strided [#1] 总区间
+285	stage0829_0285_graph-capture-full_stage1039	1039	OP-040	operator_total	graph-capture	graph-capture-full	_vllm_fa2_C::varlen_fwd 总区间
+286	stage0829_0286_graph-capture-full_stage1040	1040	OP-041	operator_total	graph-capture	graph-capture-full	aten::reshape [#1] 总区间
+287	stage0829_0287_graph-capture-full_stage1041	1041	OP-042	operator_total	graph-capture	graph-capture-full	aten::view [#1] 总区间
+288	stage0829_0288_graph-capture-full_stage1042	1042	OP-043	operator_total	graph-capture	graph-capture-full	aten::transpose [#2] 总区间
+289	stage0829_0289_graph-capture-full_stage1043	1043	OP-044	operator_total	graph-capture	graph-capture-full	aten::as_strided [#9] 总区间
+290	stage0829_0290_graph-capture-full_stage1044	1044	OP-045	operator_total	graph-capture	graph-capture-full	aten::reshape [#2] 总区间
+291	stage0829_0291_graph-capture-full_stage1045	1045	OP-046	operator_total	graph-capture	graph-capture-full	aten::_reshape_alias [#1] 总区间
+292	stage0829_0292_graph-capture-full_stage1046	1046	OP-047	operator_total	graph-capture	graph-capture-full	aten::empty_like [#2] 总区间
+293	stage0829_0293_graph-capture-full_stage1047	1047	OP-048	operator_total	graph-capture	graph-capture-full	aten::empty_strided [#2] 总区间
+294	stage0829_0294_graph-capture-full_stage1048	1048	OP-049	operator_total	graph-capture	graph-capture-full	aten::empty [#1] 总区间
+295	stage0829_0295_graph-capture-full_stage1049	1049	OP-050	operator_total	graph-capture	graph-capture-full	aten::empty [#2] 总区间
+296	stage0829_0296_graph-capture-full_stage1050	1050	OP-051	operator_total	graph-capture	graph-capture-full	aten::empty [#3] 总区间
+297	stage0829_0297_graph-capture-full_stage1051	1051	OP-052	operator_total	graph-capture	graph-capture-full	aten::empty [#4] 总区间
+298	stage0829_0298_graph-capture-full_stage1052	1052	OP-053	operator_total	graph-capture	graph-capture-full	aten::reshape [#3] 总区间
+299	stage0829_0299_graph-capture-full_stage1053	1053	OP-054	operator_total	graph-capture	graph-capture-full	aten::_reshape_alias [#2] 总区间
+300	stage0829_0300_graph-capture-full_stage1054	1054	OP-055	operator_total	graph-capture	graph-capture-full	aten::transpose [#3] 总区间
+301	stage0829_0301_graph-capture-full_stage1055	1055	OP-056	operator_total	graph-capture	graph-capture-full	aten::as_strided [#10] 总区间
+302	stage0829_0302_graph-capture-full_stage1056	1056	OP-057	operator_total	graph-capture	graph-capture-full	aten::view [#2] 总区间
+303	stage0829_0303_graph-capture-full_stage1057	1057	OP-058	operator_total	graph-capture	graph-capture-full	aten::copy_ 总区间
+304	stage0829_0304_graph-capture-full_stage1058	1058	OP-059	operator_total	graph-capture	graph-capture-full	aten::reshape [#4] 总区间
+305	stage0829_0305_graph-capture-full_stage1059	1059	OP-060	operator_total	graph-capture	graph-capture-full	aten::view [#3] 总区间
+306	stage0829_0306_graph-capture-full_stage1060	1060	OP-061	operator_total	graph-capture	graph-capture-full	aten::mm CUDA out实现总区间
+307	stage0829_0307_graph-capture-full_stage1061	1061	OP-062	operator_total	graph-capture	graph-capture-full	triton_red_fused_fused_add_rms_norm_0 总区间
+308	stage0829_0308_graph-capture-full_stage1062	1062	OP-063	operator_total	graph-capture	graph-capture-full	aten::mm CUDA out实现总区间
+309	stage0829_0309_graph-capture-full_stage1063	1063	OP-064	operator_total	graph-capture	graph-capture-full	triton_poi_fused_mul_silu_slice_1 总区间
+310	stage0829_0310_graph-capture-full_stage1064	1064	OP-065	operator_total	graph-capture	graph-capture-full	aten::mm CUDA out实现总区间
+311	stage0829_0311_graph-capture-full_stage1065	1065	OP-066	operator_total	graph-capture	graph-capture-full	triton_red_fused_fused_add_rms_norm_2 总区间
+312	stage0829_0312_graph-capture-full_stage1066	1066	OP-067	operator_total	graph-capture	graph-capture-full	aten::mm CUDA out实现总区间
+313	stage0829_0313_graph-capture-full_stage1067	1067	OP-068	operator_total	graph-capture	graph-capture-full	triton_red_fused_3 总区间
+314	stage0829_0314_graph-capture-full_stage1068	1068	OP-069	operator_total	graph-capture	graph-capture-full	triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_4 总区间
+315	stage0829_0315_graph-capture-full_stage1069	1069	OP-070	operator_total	graph-capture	graph-capture-full	triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_5 总区间
+316	stage0829_0316_graph-capture-full_stage1070	1070	OP-071	operator_total	graph-capture	graph-capture-full	triton_red_fused_fused_add_rms_norm_2 总区间
+317	stage0829_0317_graph-capture-full_stage5000	5000	CAP-TOTAL	capture_lifecycle	graph-capture	graph-capture-full	V2 FULL Graph Capture Host总区间
+318	stage0829_0318_graph-capture-full_stage5001	5001	CAP-ENTRY	capture_lifecycle	graph-capture	graph-capture-full	FULL正式capture输入/前向闭包准备
+319	stage0829_0319_graph-capture-full_stage5002	5002	CAP-GRAPH-OBJ	capture_lifecycle	graph-capture	graph-capture-full	CUDAGraph对象创建
+320	stage0829_0320_graph-capture-full_stage5003	5003	CAP-GC-POOL	capture_lifecycle	graph-capture	graph-capture-full	torch.cuda.graph上下文/Pool参数构造
+321	stage0829_0321_graph-capture-full_stage5004	5004	CAP-OFFLOAD-SYNC	capture_lifecycle	graph-capture	graph-capture-full	Capture前offloader依赖同步
+322	stage0829_0322_graph-capture-full_stage5005	5005	CAP-BEGIN-TOTAL	capture_lifecycle	graph-capture	graph-capture-full	CUDAGraph::capture_begin总区间
+323	stage0829_0323_graph-capture-full_stage5006	5006	CAP-BEGIN-SETUP	capture_lifecycle	graph-capture	graph-capture-full	generator/stream/device/mempool准备
+324	stage0829_0324_graph-capture-full_stage5007	5007	CAP-ALLOC-POOL-BEGIN	capture_lifecycle	graph-capture	graph-capture-full	Allocator进入Graph pool
+325	stage0829_0325_graph-capture-full_stage5008	5008	CAP-STREAM-BEGIN-API	capture_lifecycle	graph-capture	graph-capture-full	cudaStreamBeginCapture Host API
+326	stage0829_0326_graph-capture-full_stage5009	5009	CAP-BEGIN-INFO	capture_lifecycle	graph-capture	graph-capture-full	Capture ID/状态确认
+327	stage0829_0327_graph-capture-full_stage5010	5010	CAP-MODEL-BODY	capture_lifecycle	graph-capture	graph-capture-full	V2被捕获Qwen3模型体
+328	stage0829_0328_graph-capture-full_stage5011	5011	CAP-POST-FWD	capture_lifecycle	graph-capture	graph-capture-full	Capture模型体后offloader join
+329	stage0829_0329_graph-capture-full_stage5012	5012	CAP-END-TOTAL	capture_lifecycle	graph-capture	graph-capture-full	CUDAGraph::capture_end总区间
+330	stage0829_0330_graph-capture-full_stage5013	5013	CAP-STREAM-END-API	capture_lifecycle	graph-capture	graph-capture-full	cudaStreamEndCapture Host API
+331	stage0829_0331_graph-capture-full_stage5014	5014	CAP-ALLOC-POOL-END	capture_lifecycle	graph-capture	graph-capture-full	Allocator退出Graph pool
+332	stage0829_0332_graph-capture-full_stage5015	5015	CAP-END-VALIDATE	capture_lifecycle	graph-capture	graph-capture-full	Graph验证/generator epilogue/node查询
+333	stage0829_0333_graph-capture-full_stage5016	5016	CAP-INSTANTIATE-API	capture_lifecycle	graph-capture	graph-capture-full	cudaGraphInstantiateWithFlags Host API
+334	stage0829_0334_graph-capture-full_stage5017	5017	CAP-DESTROY-EXIT	capture_lifecycle	graph-capture	graph-capture-full	可选cudaGraphDestroy与context退出尾部
+335	stage0829_0335_graph-capture-full_stage5018	5018	CAP-PUBLISH-RETURN	capture_lifecycle	graph-capture	graph-capture-full	V2 Graph登记与capture计数
+336	stage0829_0336_graph-capture-full_stage6101	6101	GEMM-QKV-S01	gemm	graph-capture	graph-capture-full	输入/shape/device检查
+337	stage0829_0337_graph-capture-full_stage6102	6102	GEMM-QKV-S02	gemm	graph-capture	graph-capture-full	后端、输出与空输入分支选择
+338	stage0829_0338_graph-capture-full_stage6103	6103	GEMM-QKV-S03	gemm	graph-capture	graph-capture-full	布局与leading-dimension构造
+339	stage0829_0339_graph-capture-full_stage6104	6104	GEMM-QKV-S04	gemm	graph-capture	graph-capture-full	dtype模板与后端分派容器
+340	stage0829_0340_graph-capture-full_stage6105	6105	GEMM-QKV-S05	gemm	graph-capture	graph-capture-full	cuBLAS handle获取
+341	stage0829_0341_graph-capture-full_stage6106	6106	GEMM-QKV-S06	gemm	graph-capture	graph-capture-full	op/ld/scale/math参数准备
+342	stage0829_0342_graph-capture-full_stage6107	6107	GEMM-QKV-S07	gemm	graph-capture	graph-capture-full	cublasSetMathMode Host API
+343	stage0829_0343_graph-capture-full_stage6108	6108	GEMM-QKV-S08	gemm	graph-capture	graph-capture-full	Math mode状态检查
+344	stage0829_0344_graph-capture-full_stage6109	6109	GEMM-QKV-S09	gemm	graph-capture	graph-capture-full	cublasGemmEx Host API
+345	stage0829_0345_graph-capture-full_stage6110	6110	GEMM-QKV-S10	gemm	graph-capture	graph-capture-full	GEMM返回状态检查
+346	stage0829_0346_graph-capture-full_stage6111	6111	GEMM-QKV-S11	gemm	graph-capture	graph-capture-full	Math mode恢复API与检查
+347	stage0829_0347_graph-capture-full_stage6112	6112	GEMM-QKV-S12	gemm	graph-capture	graph-capture-full	实现返回尾部/epilogue/copy
+348	stage0829_0348_graph-capture-full_stage6201	6201	GEMM-OPROJ-S01	gemm	graph-capture	graph-capture-full	输入/shape/device检查
+349	stage0829_0349_graph-capture-full_stage6202	6202	GEMM-OPROJ-S02	gemm	graph-capture	graph-capture-full	后端、输出与空输入分支选择
+350	stage0829_0350_graph-capture-full_stage6203	6203	GEMM-OPROJ-S03	gemm	graph-capture	graph-capture-full	布局与leading-dimension构造
+351	stage0829_0351_graph-capture-full_stage6204	6204	GEMM-OPROJ-S04	gemm	graph-capture	graph-capture-full	dtype模板与后端分派容器
+352	stage0829_0352_graph-capture-full_stage6205	6205	GEMM-OPROJ-S05	gemm	graph-capture	graph-capture-full	cuBLAS handle获取
+353	stage0829_0353_graph-capture-full_stage6206	6206	GEMM-OPROJ-S06	gemm	graph-capture	graph-capture-full	op/ld/scale/math参数准备
+354	stage0829_0354_graph-capture-full_stage6207	6207	GEMM-OPROJ-S07	gemm	graph-capture	graph-capture-full	cublasSetMathMode Host API
+355	stage0829_0355_graph-capture-full_stage6208	6208	GEMM-OPROJ-S08	gemm	graph-capture	graph-capture-full	Math mode状态检查
+356	stage0829_0356_graph-capture-full_stage6209	6209	GEMM-OPROJ-S09	gemm	graph-capture	graph-capture-full	cublasGemmEx Host API
+357	stage0829_0357_graph-capture-full_stage6210	6210	GEMM-OPROJ-S10	gemm	graph-capture	graph-capture-full	GEMM返回状态检查
+358	stage0829_0358_graph-capture-full_stage6211	6211	GEMM-OPROJ-S11	gemm	graph-capture	graph-capture-full	Math mode恢复API与检查
+359	stage0829_0359_graph-capture-full_stage6212	6212	GEMM-OPROJ-S12	gemm	graph-capture	graph-capture-full	实现返回尾部/epilogue/copy
+360	stage0829_0360_graph-capture-full_stage6301	6301	GEMM-GATEUP-S01	gemm	graph-capture	graph-capture-full	输入/shape/device检查
+361	stage0829_0361_graph-capture-full_stage6302	6302	GEMM-GATEUP-S02	gemm	graph-capture	graph-capture-full	后端、输出与空输入分支选择
+362	stage0829_0362_graph-capture-full_stage6303	6303	GEMM-GATEUP-S03	gemm	graph-capture	graph-capture-full	布局与leading-dimension构造
+363	stage0829_0363_graph-capture-full_stage6304	6304	GEMM-GATEUP-S04	gemm	graph-capture	graph-capture-full	dtype模板与后端分派容器
+364	stage0829_0364_graph-capture-full_stage6305	6305	GEMM-GATEUP-S05	gemm	graph-capture	graph-capture-full	cuBLAS handle获取
+365	stage0829_0365_graph-capture-full_stage6306	6306	GEMM-GATEUP-S06	gemm	graph-capture	graph-capture-full	op/ld/scale/math参数准备
+366	stage0829_0366_graph-capture-full_stage6307	6307	GEMM-GATEUP-S07	gemm	graph-capture	graph-capture-full	cublasSetMathMode Host API
+367	stage0829_0367_graph-capture-full_stage6308	6308	GEMM-GATEUP-S08	gemm	graph-capture	graph-capture-full	Math mode状态检查
+368	stage0829_0368_graph-capture-full_stage6309	6309	GEMM-GATEUP-S09	gemm	graph-capture	graph-capture-full	cublasGemmEx Host API
+369	stage0829_0369_graph-capture-full_stage6310	6310	GEMM-GATEUP-S10	gemm	graph-capture	graph-capture-full	GEMM返回状态检查
+370	stage0829_0370_graph-capture-full_stage6311	6311	GEMM-GATEUP-S11	gemm	graph-capture	graph-capture-full	Math mode恢复API与检查
+371	stage0829_0371_graph-capture-full_stage6312	6312	GEMM-GATEUP-S12	gemm	graph-capture	graph-capture-full	实现返回尾部/epilogue/copy
+372	stage0829_0372_graph-capture-full_stage6401	6401	GEMM-DOWN-S01	gemm	graph-capture	graph-capture-full	输入/shape/device检查
+373	stage0829_0373_graph-capture-full_stage6402	6402	GEMM-DOWN-S02	gemm	graph-capture	graph-capture-full	后端、输出与空输入分支选择
+374	stage0829_0374_graph-capture-full_stage6403	6403	GEMM-DOWN-S03	gemm	graph-capture	graph-capture-full	布局与leading-dimension构造
+375	stage0829_0375_graph-capture-full_stage6404	6404	GEMM-DOWN-S04	gemm	graph-capture	graph-capture-full	dtype模板与后端分派容器
+376	stage0829_0376_graph-capture-full_stage6405	6405	GEMM-DOWN-S05	gemm	graph-capture	graph-capture-full	cuBLAS handle获取
+377	stage0829_0377_graph-capture-full_stage6406	6406	GEMM-DOWN-S06	gemm	graph-capture	graph-capture-full	op/ld/scale/math参数准备
+378	stage0829_0378_graph-capture-full_stage6407	6407	GEMM-DOWN-S07	gemm	graph-capture	graph-capture-full	cublasSetMathMode Host API
+379	stage0829_0379_graph-capture-full_stage6408	6408	GEMM-DOWN-S08	gemm	graph-capture	graph-capture-full	Math mode状态检查
+380	stage0829_0380_graph-capture-full_stage6409	6409	GEMM-DOWN-S09	gemm	graph-capture	graph-capture-full	cublasGemmEx Host API
+381	stage0829_0381_graph-capture-full_stage6410	6410	GEMM-DOWN-S10	gemm	graph-capture	graph-capture-full	GEMM返回状态检查
+382	stage0829_0382_graph-capture-full_stage6411	6411	GEMM-DOWN-S11	gemm	graph-capture	graph-capture-full	Math mode恢复API与检查
+383	stage0829_0383_graph-capture-full_stage6412	6412	GEMM-DOWN-S12	gemm	graph-capture	graph-capture-full	实现返回尾部/epilogue/copy
+384	stage0829_0384_graph-capture-full_stage7601	7601	KV-S01	kv_flash	graph-capture	graph-capture-full	shape元数据读取
+385	stage0829_0385_graph-capture-full_stage7602	7602	KV-S02	kv_flash	graph-capture	graph-capture-full	DeviceGuard
+386	stage0829_0386_graph-capture-full_stage7603	7603	KV-S03	kv_flash	graph-capture	graph-capture-full	当前CUDA stream获取
+387	stage0829_0387_graph-capture-full_stage7604	7604	KV-S04	kv_flash	graph-capture	graph-capture-full	KV cache dtype路径选择
+388	stage0829_0388_graph-capture-full_stage7605	7605	KV-S05	kv_flash	graph-capture	graph-capture-full	stride/scale检查与参数打包
+389	stage0829_0389_graph-capture-full_stage7606	7606	KV-S06	kv_flash	graph-capture	graph-capture-full	Grid/Block geometry
+390	stage0829_0390_graph-capture-full_stage7607	7607	KV-S07	kv_flash	graph-capture	graph-capture-full	KV/cache dtype模板分派
+391	stage0829_0391_graph-capture-full_stage7608	7608	KV-S08	kv_flash	graph-capture	graph-capture-full	cudaLaunchKernel精确Runtime API
+392	stage0829_0392_graph-capture-full_stage7609	7609	KV-S09	kv_flash	graph-capture	graph-capture-full	返回尾部
+393	stage0829_0393_graph-capture-full_stage8001	8001	FA-S01	kv_flash	graph-capture	graph-capture-full	Device/能力/dtype/contiguous验证
+394	stage0829_0394_graph-capture-full_stage8002	8002	FA-S02	kv_flash	graph-capture	graph-capture-full	shape/paged-KV/window分支容器
+395	stage0829_0395_graph-capture-full_stage8003	8003	FA-S03	kv_flash	graph-capture	graph-capture-full	Decode Q relayout决策与view链
+396	stage0829_0396_graph-capture-full_stage8004	8004	FA-S04	kv_flash	graph-capture	graph-capture-full	输出/辅助Tensor分配与可选zero
+397	stage0829_0397_graph-capture-full_stage8005	8005	FA-S05	kv_flash	graph-capture	graph-capture-full	Flash_fwd_params主参数打包
+398	stage0829_0398_graph-capture-full_stage8006	8006	FA-S06	kv_flash	graph-capture	graph-capture-full	split-KV调度与累加buffer
+399	stage0829_0399_graph-capture-full_stage8007	8007	FA-S07	kv_flash	graph-capture	graph-capture-full	leftpad/alibi可选参数配置
+400	stage0829_0400_graph-capture-full_stage8008	8008	FA-S08	kv_flash	graph-capture	graph-capture-full	当前CUDA stream获取
+401	stage0829_0401_graph-capture-full_stage8009	8009	FA-S09	kv_flash	graph-capture	graph-capture-full	dtype/head/causal/split模板分派
+402	stage0829_0402_graph-capture-full_stage8010	8010	FA-S10	kv_flash	graph-capture	graph-capture-full	Primary geometry/kernel pointer/属性准备
+403	stage0829_0403_graph-capture-full_stage8011	8011	FA-S11	kv_flash	graph-capture	graph-capture-full	Primary cudaLaunchKernel Host API
+404	stage0829_0404_graph-capture-full_stage8012	8012	FA-S12	kv_flash	graph-capture	graph-capture-full	Primary post-launch状态检查
+405	stage0829_0405_graph-capture-full_stage8013	8013	FA-S13	kv_flash	graph-capture	graph-capture-full	Combine分支/grid/模板选择
+406	stage0829_0406_graph-capture-full_stage8014	8014	FA-S14	kv_flash	graph-capture	graph-capture-full	Combine cudaLaunchKernel Host API
+407	stage0829_0407_graph-capture-full_stage8015	8015	FA-S15	kv_flash	graph-capture	graph-capture-full	Combine post-launch状态检查
+408	stage0829_0408_graph-capture-full_stage8016	8016	FA-S16	kv_flash	graph-capture	graph-capture-full	提交后relayout/copy/LSE布局
+409	stage0829_0409_graph-capture-full_stage8017	8017	FA-S17	kv_flash	graph-capture	graph-capture-full	C++返回尾部
+410	stage0829_0410_graph-capture-full_stage9001	9001	TRI-EMBED-NORM-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+411	stage0829_0411_graph-capture-full_stage9002	9002	TRI-EMBED-NORM-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+412	stage0829_0412_graph-capture-full_stage9003	9003	TRI-EMBED-NORM-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+413	stage0829_0413_graph-capture-full_stage9004	9004	TRI-EMBED-NORM-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+414	stage0829_0414_graph-capture-full_stage9005	9005	TRI-EMBED-NORM-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+415	stage0829_0415_graph-capture-full_stage9006	9006	TRI-EMBED-NORM-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+416	stage0829_0416_graph-capture-full_stage9007	9007	TRI-EMBED-NORM-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+417	stage0829_0417_graph-capture-full_stage9008	9008	TRI-EMBED-NORM-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+418	stage0829_0418_graph-capture-full_stage9009	9009	TRI-EMBED-NORM-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+419	stage0829_0419_graph-capture-full_stage9101	9101	TRI-L0-QK-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+420	stage0829_0420_graph-capture-full_stage9102	9102	TRI-L0-QK-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+421	stage0829_0421_graph-capture-full_stage9103	9103	TRI-L0-QK-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+422	stage0829_0422_graph-capture-full_stage9104	9104	TRI-L0-QK-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+423	stage0829_0423_graph-capture-full_stage9105	9105	TRI-L0-QK-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+424	stage0829_0424_graph-capture-full_stage9106	9106	TRI-L0-QK-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+425	stage0829_0425_graph-capture-full_stage9107	9107	TRI-L0-QK-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+426	stage0829_0426_graph-capture-full_stage9108	9108	TRI-L0-QK-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+427	stage0829_0427_graph-capture-full_stage9109	9109	TRI-L0-QK-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+428	stage0829_0428_graph-capture-full_stage9201	9201	TRI-L0-KROPE-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+429	stage0829_0429_graph-capture-full_stage9202	9202	TRI-L0-KROPE-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+430	stage0829_0430_graph-capture-full_stage9203	9203	TRI-L0-KROPE-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+431	stage0829_0431_graph-capture-full_stage9204	9204	TRI-L0-KROPE-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+432	stage0829_0432_graph-capture-full_stage9205	9205	TRI-L0-KROPE-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+433	stage0829_0433_graph-capture-full_stage9206	9206	TRI-L0-KROPE-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+434	stage0829_0434_graph-capture-full_stage9207	9207	TRI-L0-KROPE-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+435	stage0829_0435_graph-capture-full_stage9208	9208	TRI-L0-KROPE-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+436	stage0829_0436_graph-capture-full_stage9209	9209	TRI-L0-KROPE-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+437	stage0829_0437_graph-capture-full_stage9301	9301	TRI-L0-QROPE-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+438	stage0829_0438_graph-capture-full_stage9302	9302	TRI-L0-QROPE-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+439	stage0829_0439_graph-capture-full_stage9303	9303	TRI-L0-QROPE-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+440	stage0829_0440_graph-capture-full_stage9304	9304	TRI-L0-QROPE-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+441	stage0829_0441_graph-capture-full_stage9305	9305	TRI-L0-QROPE-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+442	stage0829_0442_graph-capture-full_stage9306	9306	TRI-L0-QROPE-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+443	stage0829_0443_graph-capture-full_stage9307	9307	TRI-L0-QROPE-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+444	stage0829_0444_graph-capture-full_stage9308	9308	TRI-L0-QROPE-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+445	stage0829_0445_graph-capture-full_stage9309	9309	TRI-L0-QROPE-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+446	stage0829_0446_graph-capture-full_stage9401	9401	TRI-REP-QK-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+447	stage0829_0447_graph-capture-full_stage9402	9402	TRI-REP-QK-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+448	stage0829_0448_graph-capture-full_stage9403	9403	TRI-REP-QK-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+449	stage0829_0449_graph-capture-full_stage9404	9404	TRI-REP-QK-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+450	stage0829_0450_graph-capture-full_stage9405	9405	TRI-REP-QK-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+451	stage0829_0451_graph-capture-full_stage9406	9406	TRI-REP-QK-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+452	stage0829_0452_graph-capture-full_stage9407	9407	TRI-REP-QK-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+453	stage0829_0453_graph-capture-full_stage9408	9408	TRI-REP-QK-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+454	stage0829_0454_graph-capture-full_stage9409	9409	TRI-REP-QK-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+455	stage0829_0455_graph-capture-full_stage9501	9501	TRI-REP-KROPE-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+456	stage0829_0456_graph-capture-full_stage9502	9502	TRI-REP-KROPE-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+457	stage0829_0457_graph-capture-full_stage9503	9503	TRI-REP-KROPE-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+458	stage0829_0458_graph-capture-full_stage9504	9504	TRI-REP-KROPE-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+459	stage0829_0459_graph-capture-full_stage9505	9505	TRI-REP-KROPE-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+460	stage0829_0460_graph-capture-full_stage9506	9506	TRI-REP-KROPE-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+461	stage0829_0461_graph-capture-full_stage9507	9507	TRI-REP-KROPE-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+462	stage0829_0462_graph-capture-full_stage9508	9508	TRI-REP-KROPE-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+463	stage0829_0463_graph-capture-full_stage9509	9509	TRI-REP-KROPE-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+464	stage0829_0464_graph-capture-full_stage9601	9601	TRI-REP-QROPE-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+465	stage0829_0465_graph-capture-full_stage9602	9602	TRI-REP-QROPE-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+466	stage0829_0466_graph-capture-full_stage9603	9603	TRI-REP-QROPE-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+467	stage0829_0467_graph-capture-full_stage9604	9604	TRI-REP-QROPE-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+468	stage0829_0468_graph-capture-full_stage9605	9605	TRI-REP-QROPE-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+469	stage0829_0469_graph-capture-full_stage9606	9606	TRI-REP-QROPE-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+470	stage0829_0470_graph-capture-full_stage9607	9607	TRI-REP-QROPE-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+471	stage0829_0471_graph-capture-full_stage9608	9608	TRI-REP-QROPE-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+472	stage0829_0472_graph-capture-full_stage9609	9609	TRI-REP-QROPE-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+473	stage0829_0473_graph-capture-full_stage9701	9701	TRI-ATTN-RES-NORM-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+474	stage0829_0474_graph-capture-full_stage9702	9702	TRI-ATTN-RES-NORM-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+475	stage0829_0475_graph-capture-full_stage9703	9703	TRI-ATTN-RES-NORM-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+476	stage0829_0476_graph-capture-full_stage9704	9704	TRI-ATTN-RES-NORM-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+477	stage0829_0477_graph-capture-full_stage9705	9705	TRI-ATTN-RES-NORM-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+478	stage0829_0478_graph-capture-full_stage9706	9706	TRI-ATTN-RES-NORM-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+479	stage0829_0479_graph-capture-full_stage9707	9707	TRI-ATTN-RES-NORM-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+480	stage0829_0480_graph-capture-full_stage9708	9708	TRI-ATTN-RES-NORM-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+481	stage0829_0481_graph-capture-full_stage9709	9709	TRI-ATTN-RES-NORM-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+482	stage0829_0482_graph-capture-full_stage9801	9801	TRI-SILU-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+483	stage0829_0483_graph-capture-full_stage9802	9802	TRI-SILU-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+484	stage0829_0484_graph-capture-full_stage9803	9803	TRI-SILU-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+485	stage0829_0485_graph-capture-full_stage9804	9804	TRI-SILU-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+486	stage0829_0486_graph-capture-full_stage9805	9805	TRI-SILU-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+487	stage0829_0487_graph-capture-full_stage9806	9806	TRI-SILU-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+488	stage0829_0488_graph-capture-full_stage9807	9807	TRI-SILU-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+489	stage0829_0489_graph-capture-full_stage9808	9808	TRI-SILU-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+490	stage0829_0490_graph-capture-full_stage9809	9809	TRI-SILU-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+491	stage0829_0491_graph-capture-full_stage9901	9901	TRI-DOWN-RES-NORM-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+492	stage0829_0492_graph-capture-full_stage9902	9902	TRI-DOWN-RES-NORM-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+493	stage0829_0493_graph-capture-full_stage9903	9903	TRI-DOWN-RES-NORM-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+494	stage0829_0494_graph-capture-full_stage9904	9904	TRI-DOWN-RES-NORM-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+495	stage0829_0495_graph-capture-full_stage9905	9905	TRI-DOWN-RES-NORM-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+496	stage0829_0496_graph-capture-full_stage9906	9906	TRI-DOWN-RES-NORM-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+497	stage0829_0497_graph-capture-full_stage9907	9907	TRI-DOWN-RES-NORM-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+498	stage0829_0498_graph-capture-full_stage9908	9908	TRI-DOWN-RES-NORM-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+499	stage0829_0499_graph-capture-full_stage9909	9909	TRI-DOWN-RES-NORM-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部
+500	stage0829_0500_graph-capture-full_stage10001	10001	TRI-FINAL-NORM-S01	triton	graph-capture	graph-capture-full	固定参数解析与grid合法性
+501	stage0829_0501_graph-capture-full_stage10002	10002	TRI-FINAL-NORM-S02	triton	graph-capture	graph-capture-full	当前CUDA Context查询
+502	stage0829_0502_graph-capture-full_stage10003	10003	TRI-FINAL-NORM-S03	triton	graph-capture	graph-capture-full	CUDA Context稀有初始化分支
+503	stage0829_0503_graph-capture-full_stage10004	10004	TRI-FINAL-NORM-S04	triton	graph-capture	graph-capture-full	function/stream/arg-count物化
+504	stage0829_0504_graph-capture-full_stage10005	10005	TRI-FINAL-NORM-S05	triton	graph-capture	graph-capture-full	Kernel参数存储与void**数组构造
+505	stage0829_0505_graph-capture-full_stage10006	10006	TRI-FINAL-NORM-S06	triton	graph-capture	graph-capture-full	Block geometry物化
+506	stage0829_0506_graph-capture-full_stage10007	10007	TRI-FINAL-NORM-S07	triton	graph-capture	graph-capture-full	cuLaunchKernel精确Driver API
+507	stage0829_0507_graph-capture-full_stage10008	10008	TRI-FINAL-NORM-S08	triton	graph-capture	graph-capture-full	Driver返回状态检查
+508	stage0829_0508_graph-capture-full_stage10009	10009	TRI-FINAL-NORM-S09	triton	graph-capture	graph-capture-full	Python扩展返回尾部

@@ -1,0 +1,2 @@
+manifests/*.tsv -diff
+patches/*.patch -diff

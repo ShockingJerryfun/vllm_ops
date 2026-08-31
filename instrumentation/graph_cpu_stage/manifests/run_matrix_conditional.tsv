@@ -1,0 +1,41 @@
+sequence	run_id	stage_id	stage_code	category	manifest_phase	runner_phase	stage_name
+1	stage0831cond_0001_graph-prefill_stage11802	11802	FILL-OUT-ZERO-S01	fill	graph-prefill	graph-prefill	out.zero_ 入口、TensorIterator/标量与 dtype 准备
+2	stage0831cond_0002_graph-prefill_stage11803	11803	FILL-OUT-ZERO-S02	fill	graph-prefill	graph-prefill	out.zero_ variant 与 launch geometry
+3	stage0831cond_0003_graph-prefill_stage11804	11804	FILL-OUT-ZERO-S03	fill	graph-prefill	graph-prefill	out.zero_ GPU fill kernel Runtime 提交
+4	stage0831cond_0004_graph-prefill_stage11805	11805	FILL-OUT-ZERO-S04	fill	graph-prefill	graph-prefill	out.zero_ submit status 与 Host 返回
+5	stage0831cond_0005_graph-prefill_stage11806	11806	FILL-LSE-FILL-S01	fill	graph-prefill	graph-prefill	softmax_lse.fill_ 入口、TensorIterator/标量与 dtype 准备
+6	stage0831cond_0006_graph-prefill_stage11807	11807	FILL-LSE-FILL-S02	fill	graph-prefill	graph-prefill	softmax_lse.fill_ variant 与 launch geometry
+7	stage0831cond_0007_graph-prefill_stage11808	11808	FILL-LSE-FILL-S03	fill	graph-prefill	graph-prefill	softmax_lse.fill_ GPU fill kernel Runtime 提交
+8	stage0831cond_0008_graph-prefill_stage11809	11809	FILL-LSE-FILL-S04	fill	graph-prefill	graph-prefill	softmax_lse.fill_ submit status 与 Host 返回
+9	stage0831cond_0009_graph-prefill_stage11810	11810	FILL-P-ZERO-S01	fill	graph-prefill	graph-prefill	p.zero_ 入口、TensorIterator/标量与 dtype 准备
+10	stage0831cond_0010_graph-prefill_stage11811	11811	FILL-P-ZERO-S02	fill	graph-prefill	graph-prefill	p.zero_ variant 与 launch geometry
+11	stage0831cond_0011_graph-prefill_stage11812	11812	FILL-P-ZERO-S03	fill	graph-prefill	graph-prefill	p.zero_ GPU fill kernel Runtime 提交
+12	stage0831cond_0012_graph-prefill_stage11813	11813	FILL-P-ZERO-S04	fill	graph-prefill	graph-prefill	p.zero_ submit status 与 Host 返回
+13	stage0831cond_0013_graph-prefill_stage11815	11815	FILL-EMPTYK-OUT-S01	fill	graph-prefill	graph-prefill	empty-K out.zero_ 入口、TensorIterator/标量与 dtype 准备
+14	stage0831cond_0014_graph-prefill_stage11816	11816	FILL-EMPTYK-OUT-S02	fill	graph-prefill	graph-prefill	empty-K out.zero_ variant 与 launch geometry
+15	stage0831cond_0015_graph-prefill_stage11817	11817	FILL-EMPTYK-OUT-S03	fill	graph-prefill	graph-prefill	empty-K out.zero_ GPU fill kernel Runtime 提交
+16	stage0831cond_0016_graph-prefill_stage11818	11818	FILL-EMPTYK-OUT-S04	fill	graph-prefill	graph-prefill	empty-K out.zero_ submit status 与 Host 返回
+17	stage0831cond_0017_graph-prefill_stage11819	11819	FILL-EMPTYK-LSE-S01	fill	graph-prefill	graph-prefill	empty-K softmax_lse.fill_ 入口、TensorIterator/标量与 dtype 准备
+18	stage0831cond_0018_graph-prefill_stage11820	11820	FILL-EMPTYK-LSE-S02	fill	graph-prefill	graph-prefill	empty-K softmax_lse.fill_ variant 与 launch geometry
+19	stage0831cond_0019_graph-prefill_stage11821	11821	FILL-EMPTYK-LSE-S03	fill	graph-prefill	graph-prefill	empty-K softmax_lse.fill_ GPU fill kernel Runtime 提交
+20	stage0831cond_0020_graph-prefill_stage11822	11822	FILL-EMPTYK-LSE-S04	fill	graph-prefill	graph-prefill	empty-K softmax_lse.fill_ submit status 与 Host 返回
+21	stage0831cond_0021_graph-capture-full_stage11802	11802	FILL-OUT-ZERO-S01	fill	graph-capture	graph-capture-full	out.zero_ 入口、TensorIterator/标量与 dtype 准备
+22	stage0831cond_0022_graph-capture-full_stage11803	11803	FILL-OUT-ZERO-S02	fill	graph-capture	graph-capture-full	out.zero_ variant 与 launch geometry
+23	stage0831cond_0023_graph-capture-full_stage11804	11804	FILL-OUT-ZERO-S03	fill	graph-capture	graph-capture-full	out.zero_ GPU fill kernel Runtime 提交
+24	stage0831cond_0024_graph-capture-full_stage11805	11805	FILL-OUT-ZERO-S04	fill	graph-capture	graph-capture-full	out.zero_ submit status 与 Host 返回
+25	stage0831cond_0025_graph-capture-full_stage11806	11806	FILL-LSE-FILL-S01	fill	graph-capture	graph-capture-full	softmax_lse.fill_ 入口、TensorIterator/标量与 dtype 准备
+26	stage0831cond_0026_graph-capture-full_stage11807	11807	FILL-LSE-FILL-S02	fill	graph-capture	graph-capture-full	softmax_lse.fill_ variant 与 launch geometry
+27	stage0831cond_0027_graph-capture-full_stage11808	11808	FILL-LSE-FILL-S03	fill	graph-capture	graph-capture-full	softmax_lse.fill_ GPU fill kernel Runtime 提交
+28	stage0831cond_0028_graph-capture-full_stage11809	11809	FILL-LSE-FILL-S04	fill	graph-capture	graph-capture-full	softmax_lse.fill_ submit status 与 Host 返回
+29	stage0831cond_0029_graph-capture-full_stage11810	11810	FILL-P-ZERO-S01	fill	graph-capture	graph-capture-full	p.zero_ 入口、TensorIterator/标量与 dtype 准备
+30	stage0831cond_0030_graph-capture-full_stage11811	11811	FILL-P-ZERO-S02	fill	graph-capture	graph-capture-full	p.zero_ variant 与 launch geometry
+31	stage0831cond_0031_graph-capture-full_stage11812	11812	FILL-P-ZERO-S03	fill	graph-capture	graph-capture-full	p.zero_ GPU fill kernel Runtime 提交
+32	stage0831cond_0032_graph-capture-full_stage11813	11813	FILL-P-ZERO-S04	fill	graph-capture	graph-capture-full	p.zero_ submit status 与 Host 返回
+33	stage0831cond_0033_graph-capture-full_stage11815	11815	FILL-EMPTYK-OUT-S01	fill	graph-capture	graph-capture-full	empty-K out.zero_ 入口、TensorIterator/标量与 dtype 准备
+34	stage0831cond_0034_graph-capture-full_stage11816	11816	FILL-EMPTYK-OUT-S02	fill	graph-capture	graph-capture-full	empty-K out.zero_ variant 与 launch geometry
+35	stage0831cond_0035_graph-capture-full_stage11817	11817	FILL-EMPTYK-OUT-S03	fill	graph-capture	graph-capture-full	empty-K out.zero_ GPU fill kernel Runtime 提交
+36	stage0831cond_0036_graph-capture-full_stage11818	11818	FILL-EMPTYK-OUT-S04	fill	graph-capture	graph-capture-full	empty-K out.zero_ submit status 与 Host 返回
+37	stage0831cond_0037_graph-capture-full_stage11819	11819	FILL-EMPTYK-LSE-S01	fill	graph-capture	graph-capture-full	empty-K softmax_lse.fill_ 入口、TensorIterator/标量与 dtype 准备
+38	stage0831cond_0038_graph-capture-full_stage11820	11820	FILL-EMPTYK-LSE-S02	fill	graph-capture	graph-capture-full	empty-K softmax_lse.fill_ variant 与 launch geometry
+39	stage0831cond_0039_graph-capture-full_stage11821	11821	FILL-EMPTYK-LSE-S03	fill	graph-capture	graph-capture-full	empty-K softmax_lse.fill_ GPU fill kernel Runtime 提交
+40	stage0831cond_0040_graph-capture-full_stage11822	11822	FILL-EMPTYK-LSE-S04	fill	graph-capture	graph-capture-full	empty-K softmax_lse.fill_ submit status 与 Host 返回

@@ -1,0 +1,2262 @@
+diff --git a/aten/src/ATen/EmptyTensor.cpp b/aten/src/ATen/EmptyTensor.cpp
+index 4d12942..d6b982b 100644
+--- a/aten/src/ATen/EmptyTensor.cpp
++++ b/aten/src/ATen/EmptyTensor.cpp
+@@ -1,5 +1,6 @@
+ #define TORCH_ASSERT_NO_OPERATORS
+ #include <ATen/EmptyTensor.h>
++#include "read_core_cycle_qwen3.h"
+ #include <ATen/Context.h>
+ #include <c10/core/CPUAllocator.h>
+ #include <c10/util/safe_numerics.h>
+@@ -179,16 +180,24 @@ static TensorBase _empty_generic(
+     c10::DispatchKeySet ks,
+     ScalarType scalar_type,
+     std::optional<c10::MemoryFormat> memory_format_opt) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_prepare(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(3));
+   at::detail::check_size_nonnegative(size);
+   at::detail::raise_warning_for_complex_half(scalar_type);
+   caffe2::TypeMeta dtype = scalarTypeToTypeMeta(scalar_type);
+   auto size_bytes = computeStorageNbytesContiguous(size, dtype.itemsize());
++  rcc_qwen3_prepare.Finish();
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_storage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(4));
+   auto storage_impl = c10::make_intrusive<StorageImpl>(
+       c10::StorageImpl::use_byte_size_t(),
+       size_bytes,
+       allocator,
+       /*resizeable=*/true);
++  rcc_qwen3_storage.Finish();
+ 
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_return(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(12));
+   auto tensor = detail::make_tensor_base<TensorImpl>(
+       std::move(storage_impl), ks, dtype);
+   // Default TensorImpl has size [0]
+@@ -232,16 +241,24 @@ static TensorBase _empty_strided_generic(
+     c10::Allocator* allocator,
+     c10::DispatchKeySet ks,
+     ScalarType scalar_type) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_prepare(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(3));
+   at::detail::check_size_nonnegative(size);
+   at::detail::raise_warning_for_complex_half(scalar_type);
+   caffe2::TypeMeta dtype = scalarTypeToTypeMeta(scalar_type);
+   auto size_bytes = computeStorageNbytes(size, stride, dtype.itemsize());
++  rcc_qwen3_prepare.Finish();
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_storage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(4));
+   auto storage_impl = c10::make_intrusive<StorageImpl>(
+       c10::StorageImpl::use_byte_size_t(),
+       size_bytes,
+       allocator,
+       /*resizeable=*/true);
++  rcc_qwen3_storage.Finish();
+ 
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_return(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(12));
+   auto tensor = detail::make_tensor_base<TensorImpl>(
+       std::move(storage_impl), ks, dtype);
+   tensor.unsafeGetTensorImpl()->set_sizes_and_strides(size, stride);
+diff --git a/aten/src/ATen/core/List_inl.h b/aten/src/ATen/core/List_inl.h
+index 96f78fa..c32e77f 100644
+--- a/aten/src/ATen/core/List_inl.h
++++ b/aten/src/ATen/core/List_inl.h
+@@ -198,7 +198,7 @@ typename List<T>::internal_const_reference_type List<T>::operator[](size_type po
+ template<class T>
+ typename List<T>::internal_reference_type List<T>::operator[](size_type pos) {
+   static_cast<void>(impl_->list.at(pos)); // Throw the exception if it is out of range.
+-  return {impl_->list.begin() + static_cast<typename decltype(impl_->list)::difference_type>(pos)};
++  return {impl_->list.begin() + static_cast<typename c10::detail::ListImpl::list_type::difference_type>(pos)};
+ }
+ 
+ template<class T>
+diff --git a/aten/src/ATen/core/dispatch/Dispatcher.h b/aten/src/ATen/core/dispatch/Dispatcher.h
+index 6b63bd4..6d945dd 100644
+--- a/aten/src/ATen/core/dispatch/Dispatcher.h
++++ b/aten/src/ATen/core/dispatch/Dispatcher.h
+@@ -15,6 +15,9 @@
+ #include <mutex>
+ #include <type_traits>
+ 
++#include "read_core_cycle_runtime.h"
++#include "read_core_cycle_qwen3.h"
++
+ #include <ATen/core/enum_tag.h>
+ #include <ATen/core/grad_mode.h>
+ 
+@@ -42,6 +45,15 @@ class TORCH_API OperatorHandle;
+ template <class FuncType>
+ class TypedOperatorHandle;
+ 
++namespace detail {
++template <class... Args>
++inline bool rccQwen3OperatorStageMatches(
++    const OperatorName& operator_name, const Args&... args);
++inline bool rccQwen3OperatorStageMatches(
++    const OperatorName& operator_name, const Stack* stack);
++inline void rccQwen3PublishOperatorBegin(bool selected);
++} // namespace detail
++
+ /**
+  * Implement this interface and register your instance with the dispatcher
+  * to get notified when operators are registered or deregistered with
+@@ -536,6 +548,8 @@ class TORCH_API OperatorHandle {
+   }
+ 
+   void callBoxed(Stack* stack) const {
++    detail::rccQwen3PublishOperatorBegin(
++        detail::rccQwen3OperatorStageMatches(operator_name(), stack));
+     c10::Dispatcher::singleton().callBoxed(*this, stack);
+   }
+ 
+@@ -613,6 +627,8 @@ class TypedOperatorHandle<Return(Args...)> final : public OperatorHandle {
+   // See [Note: Argument forwarding in the dispatcher] for why Args doesn't use
+   // &&
+   C10_ALWAYS_INLINE Return call(Args... args) const {
++    detail::rccQwen3PublishOperatorBegin(
++        detail::rccQwen3OperatorStageMatches(operator_name(), args...));
+     return c10::Dispatcher::singleton().call<Return, Args...>(
+         *this, std::forward<Args>(args)...);
+   }
+@@ -636,6 +652,233 @@ namespace detail {
+ template <class... Args>
+ inline void unused_arg_(const Args&... /*unused*/) {}
+ 
++enum class RccQwen3Parent : std::uint8_t {
++  None,
++  KvCacheUpdate,
++  Attention,
++};
++
++struct RccQwen3ParentState final {
++  RccQwen3Parent parent{RccQwen3Parent::None};
++  std::uint16_t target_occurrence{0};
++};
++
++inline thread_local RccQwen3ParentState rcc_qwen3_parent_state;
++inline thread_local bool rcc_qwen3_pending_operator_match{false};
++inline thread_local std::uint16_t rcc_qwen3_qkv_occurrence{0};
++
++class RccQwen3ParentScope final {
++ public:
++  explicit RccQwen3ParentScope(const OperatorName& operator_name) {
++    if (!vllm::instrumentation::ReadCoreCycleSiteSelected(700) ||
++        rcc_qwen3_parent_state.parent != RccQwen3Parent::None) {
++      return;
++    }
++    const auto stage = vllm::instrumentation::ReadCoreCycleQwen3PhysicalRoot(
++        vllm::instrumentation::read_core_cycle_selection.exact_stage);
++    if (stage >= 1005 && stage <= 1016 &&
++        operator_name.name == "vllm::unified_kv_cache_update") {
++      previous_ = rcc_qwen3_parent_state;
++      rcc_qwen3_parent_state = {
++          RccQwen3Parent::KvCacheUpdate, 0};
++      active_ = true;
++    } else if (stage >= 1017 && stage <= 1059 &&
++               operator_name.name ==
++                   "vllm::unified_attention_with_output") {
++      previous_ = rcc_qwen3_parent_state;
++      rcc_qwen3_parent_state = {RccQwen3Parent::Attention, 0};
++      active_ = true;
++    }
++  }
++
++  ~RccQwen3ParentScope() {
++    if (active_) {
++      rcc_qwen3_parent_state = previous_;
++    }
++  }
++
++ private:
++  RccQwen3ParentState previous_{};
++  bool active_{false};
++};
++
++struct RccQwen3NestedTarget final {
++  RccQwen3Parent parent{RccQwen3Parent::None};
++  const char* name{nullptr};
++  std::uint16_t occurrence{0};
++};
++
++inline RccQwen3NestedTarget rccQwen3NestedTarget(
++    std::uint16_t stage) {
++  stage = vllm::instrumentation::ReadCoreCycleQwen3PhysicalRoot(stage);
++  switch (stage) {
++    case 1006: return {RccQwen3Parent::KvCacheUpdate, "aten::transpose", 1};
++    case 1007: return {RccQwen3Parent::KvCacheUpdate, "aten::as_strided", 1};
++    case 1008: return {RccQwen3Parent::KvCacheUpdate, "aten::split", 1};
++    case 1009: return {RccQwen3Parent::KvCacheUpdate, "aten::narrow", 1};
++    case 1010: return {RccQwen3Parent::KvCacheUpdate, "aten::slice", 1};
++    case 1011: return {RccQwen3Parent::KvCacheUpdate, "aten::as_strided", 2};
++    case 1012: return {RccQwen3Parent::KvCacheUpdate, "aten::narrow", 2};
++    case 1013: return {RccQwen3Parent::KvCacheUpdate, "aten::slice", 2};
++    case 1014: return {RccQwen3Parent::KvCacheUpdate, "aten::as_strided", 3};
++    case 1015:
++      return {
++          RccQwen3Parent::KvCacheUpdate,
++          "_C_cache_ops::reshape_and_cache_flash",
++          1};
++    case 1016: return {RccQwen3Parent::KvCacheUpdate, "aten::empty", 1};
++    case 1018: return {RccQwen3Parent::Attention, "aten::transpose", 1};
++    case 1019: return {RccQwen3Parent::Attention, "aten::as_strided", 1};
++    case 1020: return {RccQwen3Parent::Attention, "aten::split", 1};
++    case 1021: return {RccQwen3Parent::Attention, "aten::narrow", 1};
++    case 1022: return {RccQwen3Parent::Attention, "aten::slice", 1};
++    case 1023: return {RccQwen3Parent::Attention, "aten::as_strided", 2};
++    case 1024: return {RccQwen3Parent::Attention, "aten::narrow", 2};
++    case 1025: return {RccQwen3Parent::Attention, "aten::slice", 2};
++    case 1026: return {RccQwen3Parent::Attention, "aten::as_strided", 3};
++    case 1027: return {RccQwen3Parent::Attention, "aten::expand", 1};
++    case 1028: return {RccQwen3Parent::Attention, "aten::as_strided", 4};
++    case 1029: return {RccQwen3Parent::Attention, "aten::expand", 2};
++    case 1030: return {RccQwen3Parent::Attention, "aten::as_strided", 5};
++    case 1031: return {RccQwen3Parent::Attention, "aten::expand", 3};
++    case 1032: return {RccQwen3Parent::Attention, "aten::as_strided", 6};
++    case 1033: return {RccQwen3Parent::Attention, "aten::slice", 3};
++    case 1034: return {RccQwen3Parent::Attention, "aten::as_strided", 7};
++    case 1035: return {RccQwen3Parent::Attention, "aten::slice", 4};
++    case 1036: return {RccQwen3Parent::Attention, "aten::as_strided", 8};
++    case 1037: return {RccQwen3Parent::Attention, "aten::empty_like", 1};
++    case 1038:
++      return {RccQwen3Parent::Attention, "aten::empty_strided", 1};
++    case 1039:
++      return {RccQwen3Parent::Attention, "_vllm_fa2_C::varlen_fwd", 1};
++    case 1040: return {RccQwen3Parent::Attention, "aten::reshape", 1};
++    case 1041: return {RccQwen3Parent::Attention, "aten::view", 1};
++    case 1042: return {RccQwen3Parent::Attention, "aten::transpose", 2};
++    case 1043: return {RccQwen3Parent::Attention, "aten::as_strided", 9};
++    case 1044: return {RccQwen3Parent::Attention, "aten::reshape", 2};
++    case 1045:
++      return {RccQwen3Parent::Attention, "aten::_reshape_alias", 1};
++    case 1046: return {RccQwen3Parent::Attention, "aten::empty_like", 2};
++    case 1047:
++      return {RccQwen3Parent::Attention, "aten::empty_strided", 2};
++    case 1048: return {RccQwen3Parent::Attention, "aten::empty", 1};
++    case 1049: return {RccQwen3Parent::Attention, "aten::empty", 2};
++    case 1050: return {RccQwen3Parent::Attention, "aten::empty", 3};
++    case 1051: return {RccQwen3Parent::Attention, "aten::empty", 4};
++    case 1052: return {RccQwen3Parent::Attention, "aten::reshape", 3};
++    case 1053:
++      return {RccQwen3Parent::Attention, "aten::_reshape_alias", 2};
++    case 1054: return {RccQwen3Parent::Attention, "aten::transpose", 3};
++    case 1055: return {RccQwen3Parent::Attention, "aten::as_strided", 10};
++    case 1056: return {RccQwen3Parent::Attention, "aten::view", 2};
++    case 1057: return {RccQwen3Parent::Attention, "aten::copy_", 1};
++    case 1058: return {RccQwen3Parent::Attention, "aten::reshape", 4};
++    case 1059: return {RccQwen3Parent::Attention, "aten::view", 3};
++    default: return {};
++  }
++}
++
++inline bool rccQwen3NestedOperatorMatches(
++    std::uint16_t stage, const OperatorName& operator_name) {
++  const auto target = rccQwen3NestedTarget(stage);
++  if (target.name == nullptr ||
++      target.parent != rcc_qwen3_parent_state.parent ||
++      operator_name.name != target.name) {
++    return false;
++  }
++  ++rcc_qwen3_parent_state.target_occurrence;
++  return rcc_qwen3_parent_state.target_occurrence == target.occurrence;
++}
++
++inline bool rccQwen3GemmShapeMatches(
++    std::uint16_t stage,
++    const at::Tensor& mat1,
++    const at::Tensor& mat2) {
++  if (mat1.dim() != 2 || mat2.dim() != 2) {
++    return false;
++  }
++  const auto input_width = mat1.size(1);
++  const auto output_width = mat2.size(1);
++  if (input_width == 4096 && output_width == 6144) {
++    ++rcc_qwen3_qkv_occurrence;
++    return (stage == 1001 && rcc_qwen3_qkv_occurrence == 1) ||
++        (stage == 1066 && rcc_qwen3_qkv_occurrence > 1);
++  }
++  return (stage == 1060 && input_width == 4096 && output_width == 4096) ||
++      (stage == 1062 && input_width == 4096 && output_width == 24576) ||
++      (stage == 1064 && input_width == 12288 && output_width == 4096);
++}
++
++template <class... Args>
++inline bool rccQwen3GemmShapeMatches(
++    std::uint16_t /*stage*/, const Args&... /*args*/) {
++  return false;
++}
++
++inline bool rccQwen3ParentOperatorMatches(
++    std::uint16_t stage, const OperatorName& operator_name) {
++  return (stage == 1005 &&
++          operator_name.name == "vllm::unified_kv_cache_update") ||
++      (stage == 1017 &&
++       operator_name.name == "vllm::unified_attention_with_output");
++}
++
++template <class... Args>
++inline bool rccQwen3OperatorStageMatches(
++    const OperatorName& operator_name, const Args&... args) {
++  if (!vllm::instrumentation::ReadCoreCycleSiteSelected(700)) {
++    return false;
++  }
++  const auto exact_stage =
++      vllm::instrumentation::read_core_cycle_selection.exact_stage;
++  const auto stage =
++      vllm::instrumentation::ReadCoreCycleQwen3PhysicalRoot(exact_stage);
++  if (operator_name.name == "aten::mm" &&
++      (stage == 1001 || stage == 1060 || stage == 1062 ||
++       stage == 1064 || stage == 1066)) {
++    return rccQwen3GemmShapeMatches(stage, args...);
++  }
++  return rccQwen3ParentOperatorMatches(stage, operator_name) ||
++      rccQwen3NestedOperatorMatches(stage, operator_name);
++}
++
++inline bool rccQwen3OperatorStageMatches(
++    const OperatorName& operator_name, const Stack* stack) {
++  if (!vllm::instrumentation::ReadCoreCycleSiteSelected(700)) {
++    return false;
++  }
++  const auto exact_stage =
++      vllm::instrumentation::read_core_cycle_selection.exact_stage;
++  const auto stage =
++      vllm::instrumentation::ReadCoreCycleQwen3PhysicalRoot(exact_stage);
++  if (operator_name.name == "aten::mm" && stack->size() >= 2 &&
++      (*stack)[0].isTensor() && (*stack)[1].isTensor() &&
++      (stage == 1001 || stage == 1060 || stage == 1062 ||
++       stage == 1064 || stage == 1066)) {
++    return rccQwen3GemmShapeMatches(
++        stage, (*stack)[0].toTensor(), (*stack)[1].toTensor());
++  }
++  return rccQwen3ParentOperatorMatches(stage, operator_name) ||
++      rccQwen3NestedOperatorMatches(stage, operator_name);
++}
++
++inline void rccQwen3PublishOperatorBegin(bool selected) {
++  rcc_qwen3_pending_operator_match = selected;
++  if (selected &&
++      !vllm::instrumentation::ReadCoreCycleQwen3FineStage(
++          vllm::instrumentation::read_core_cycle_selection.exact_stage)) {
++    vllm::instrumentation::PublishReadCoreCycleFrontendBegin(
++        700,
++        vllm::instrumentation::read_core_cycle_selection.exact_stage);
++  }
++}
++
++inline bool rccQwen3ConsumePendingOperatorMatch() {
++  const bool selected = rcc_qwen3_pending_operator_match;
++  rcc_qwen3_pending_operator_match = false;
++  return selected;
++}
++
+ // CaptureKernelCall is intended to capture return values from Dispatcher
+ // unboxed kernel calls. A record function may request to get outputs from the
+ // kernel calls. For boxed kernels, it's straightforward, the returned values
+@@ -776,6 +1019,16 @@ template <class Return, class... Args>
+ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
+     const TypedOperatorHandle<Return(Args...)>& op,
+     Args... args) const {
++  detail::RccQwen3ParentScope rcc_qwen3_parent_scope(op.operator_name());
++  const bool rcc_qwen3_operator_selected =
++      detail::rccQwen3ConsumePendingOperatorMatch();
++  vllm::instrumentation::ReadCoreCycleQwen3LeafScope
++      rcc_qwen3_leaf_scope(rcc_qwen3_operator_selected);
++  vllm::instrumentation::ReadCoreCycleFrontendChainGuard
++      rcc_qwen3_operator_guard(
++          rcc_qwen3_operator_selected &&
++          !vllm::instrumentation::ReadCoreCycleQwen3FineStage(
++              vllm::instrumentation::read_core_cycle_selection.exact_stage));
+   auto dispatchKeySet =
+       op.operatorDef_->op.dispatchKeyExtractor()
+           .template getDispatchKeySetUnboxed<Args...>(args...);
+@@ -852,6 +1105,16 @@ inline Return Dispatcher::redispatch(
+ 
+ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
+     const {
++  detail::RccQwen3ParentScope rcc_qwen3_parent_scope(op.operator_name());
++  const bool rcc_qwen3_operator_selected =
++      detail::rccQwen3ConsumePendingOperatorMatch();
++  vllm::instrumentation::ReadCoreCycleQwen3LeafScope
++      rcc_qwen3_leaf_scope(rcc_qwen3_operator_selected);
++  vllm::instrumentation::ReadCoreCycleFrontendChainGuard
++      rcc_qwen3_operator_guard(
++          rcc_qwen3_operator_selected &&
++          !vllm::instrumentation::ReadCoreCycleQwen3FineStage(
++              vllm::instrumentation::read_core_cycle_selection.exact_stage));
+   // note: this doesn't need the mutex because write operations on the list keep
+   // iterators intact.
+   const auto& entry = op.operatorDef_->op;
+diff --git a/aten/src/ATen/cuda/CUDABlas.cpp b/aten/src/ATen/cuda/CUDABlas.cpp
+index b9e66fe..a26bb00 100644
+--- a/aten/src/ATen/cuda/CUDABlas.cpp
++++ b/aten/src/ATen/cuda/CUDABlas.cpp
+@@ -13,6 +13,7 @@
+ #include <c10/core/ScalarType.h>
+ 
+ #include <ATen/cuda/detail/BLASConstants.h>
++#include <read_core_cycle_runtime.h>
+ 
+ #ifdef USE_ROCM
+ #include <c10/cuda/CUDAStream.h>
+@@ -257,6 +258,26 @@ struct CublasLtWorkspace {
+ 
+ namespace at::cuda::blas {
+ 
++constexpr std::uint16_t kRccGraphSite = 700;
++
++constexpr std::uint16_t rcc_qwen3_gemm_stage_base(
++    int64_t m,
++    int64_t k) {
++  if (m == 6144 && k == 4096) {
++    return 6100;
++  }
++  if (m == 4096 && k == 4096) {
++    return 6200;
++  }
++  if (m == 24576 && k == 4096) {
++    return 6300;
++  }
++  if (m == 4096 && k == 12288) {
++    return 6400;
++  }
++  return 0;
++}
++
+ /* LEVEL 3 BLAS FUNCTIONS */
+ 
+ #define GEMM_CHECK_ARGVALUES(Dtype)           \
+@@ -1217,7 +1238,34 @@ inline void gemm_internal_cublas_half_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DTYPE(
+ 
+ template <typename C_Dtype>
+ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DTYPE(at::BFloat16, C_Dtype)) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  const auto rcc_stage_base = rcc_qwen3_gemm_stage_base(m, k);
++  const auto rcc_s05_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 5);
++  const bool rcc_record_s05 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s05_stage);
++  const auto rcc_s05_begin = rcc_record_s05
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+   cublasHandle_t handle = at::cuda::getCurrentCUDABlasHandle();
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s05) {
++    const auto rcc_s05_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s05_stage, rcc_s05_begin, rcc_s05_end);
++  }
++  const auto rcc_s06_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 6);
++  const bool rcc_record_s06 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s06_stage);
++  const auto rcc_s06_begin = rcc_record_s06
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+   cublasOperation_t opa = _cublasOpFromChar(transa);
+   cublasOperation_t opb = _cublasOpFromChar(transb);
+   float falpha = alpha;
+@@ -1242,8 +1290,57 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
+ #else
+   auto compute_type = CUDA_R_32F;
+ #endif
+-  TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, cublas_flags));
+-  TORCH_CUDABLAS_CHECK(cublasGemmEx(
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s06) {
++    const auto rcc_s06_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s06_stage, rcc_s06_begin, rcc_s06_end);
++  }
++  const auto rcc_s07_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 7);
++  const bool rcc_record_s07 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s07_stage);
++  const auto rcc_s07_begin = rcc_record_s07
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
++  const auto math_mode_status = cublasSetMathMode(handle, cublas_flags);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s07) {
++    const auto rcc_s07_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s07_stage, rcc_s07_begin, rcc_s07_end);
++  }
++  const auto rcc_s08_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 8);
++  const bool rcc_record_s08 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s08_stage);
++  const auto rcc_s08_begin = rcc_record_s08
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
++  TORCH_CUDABLAS_CHECK(math_mode_status);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s08) {
++    const auto rcc_s08_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s08_stage, rcc_s08_begin, rcc_s08_end);
++  }
++  const auto rcc_s09_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 9);
++  const bool rcc_record_s09 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s09_stage);
++  const auto rcc_s09_begin = rcc_record_s09
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
++  const auto gemm_status = cublasGemmEx(
+       handle,
+       opa,
+       opb,
+@@ -1262,8 +1359,51 @@ inline void gemm_internal_cublas_bfloat16_helper(CUDABLAS_GEMM_ARGTYPES_AND_C_DT
+       std::is_same_v<C_Dtype, float> ? CUDA_R_32F : CUDA_R_16BF,
+       ldc,
+       compute_type,
+-      CUBLAS_GEMM_DEFAULT_TENSOR_OP));
+-  TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
++      CUBLAS_GEMM_DEFAULT_TENSOR_OP);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s09) {
++    const auto rcc_s09_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s09_stage, rcc_s09_begin, rcc_s09_end);
++  }
++  const auto rcc_s10_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 10);
++  const bool rcc_record_s10 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s10_stage);
++  const auto rcc_s10_begin = rcc_record_s10
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
++  TORCH_CUDABLAS_CHECK(gemm_status);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s10) {
++    const auto rcc_s10_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s10_stage, rcc_s10_begin, rcc_s10_end);
++  }
++  const auto rcc_s11_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 11);
++  const bool rcc_record_s11 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s11_stage);
++  const auto rcc_s11_begin = rcc_record_s11
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
++  const auto restore_math_mode_status =
++      cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
++  TORCH_CUDABLAS_CHECK(restore_math_mode_status);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s11) {
++    const auto rcc_s11_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s11_stage, rcc_s11_begin, rcc_s11_end);
++  }
++#endif
+ }
+ 
+ template <>
+diff --git a/aten/src/ATen/cuda/CUDAGraph.cpp b/aten/src/ATen/cuda/CUDAGraph.cpp
+index 3de3cc3..e380670 100644
+--- a/aten/src/ATen/cuda/CUDAGraph.cpp
++++ b/aten/src/ATen/cuda/CUDAGraph.cpp
+@@ -8,6 +8,8 @@
+ 
+ #include <cstddef>
+ 
++#include "read_core_cycle_runtime.h"
++
+ namespace at::cuda {
+ 
+ static bool _cuda_graphs_debug = false;
+@@ -58,6 +60,16 @@ void CUDAGraph::register_generator_state(const at::Generator& generator) {
+ }
+ 
+ void CUDAGraph::capture_begin(MempoolId_t pool/*=0*/, cudaStreamCaptureMode capture_mode) {
++  const bool rcc_capture_begin_total =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5005);
++  const auto rcc_capture_begin_total_start = rcc_capture_begin_total
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  const bool rcc_capture_begin_setup =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5006);
++  const auto rcc_capture_begin_setup_start = rcc_capture_begin_setup
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   TORCH_CHECK(!has_graph_exec_,
+               "This CUDAGraph instance already owns a captured graph. "
+               "To capture a new graph, create a new instance.");
+@@ -95,6 +107,11 @@ void CUDAGraph::capture_begin(MempoolId_t pool/*=0*/, cudaStreamCaptureMode capt
+     mempool_id_ = at::cuda::MemPool::graph_pool_handle(false);
+     TORCH_INTERNAL_ASSERT(mempool_id_.first > 0);
+   }
++  if (rcc_capture_begin_setup) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5006, rcc_capture_begin_setup_start, end);
++  }
+ 
+   auto filter = [this](cudaStream_t stream) {
+     cudaStreamCaptureStatus status{};
+@@ -106,34 +123,99 @@ void CUDAGraph::capture_begin(MempoolId_t pool/*=0*/, cudaStreamCaptureMode capt
+   // Addendum: beginAllocateStreamToPool is now called before cudaStreamBeginCapture to prevent an
+   // autograd thread's free() call triggering an invalid cudaEventRecord in the caching allocator
+   // due to the capture status being updated _after_ a capture had already started.
++  const bool rcc_capture_allocate_begin =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5007);
++  const auto rcc_capture_allocate_begin_start = rcc_capture_allocate_begin
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   c10::cuda::CUDACachingAllocator::beginAllocateToPool(capture_dev_, mempool_id_, filter);
+ 
+   at::getHostAllocator(at::kCUDA)->begin_allocate_to_pool(mempool_id_, [filter](c10::Stream stream) {
+     return filter(CUDAStream(CUDAStream::UNCHECKED, stream));
+   });
++  if (rcc_capture_allocate_begin) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5007, rcc_capture_allocate_begin_start, end);
++  }
+ 
+   // cudaStreamCaptureModeGlobal is the most conservative option to
+   // prevent potentially unsafe CUDA API calls during capture.  See
+   // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__STREAM.html#group__CUDART__STREAM_1g9d0535d93a214cbf126835257b16ba85
++  const bool rcc_stream_begin =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5008);
++  const auto rcc_stream_begin_start = rcc_stream_begin
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   AT_CUDA_CHECK(cudaStreamBeginCapture(capture_stream_, capture_mode));
++  if (rcc_stream_begin) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5008, rcc_stream_begin_start, end);
++  }
+ 
++  const bool rcc_capture_info =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5009);
++  const auto rcc_capture_info_start = rcc_capture_info
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   cudaStreamCaptureStatus status{};
+   AT_CUDA_CHECK(cudaStreamGetCaptureInfo(stream, &status, &capture_id_));
+   TORCH_INTERNAL_ASSERT(status == cudaStreamCaptureStatus::cudaStreamCaptureStatusActive);
++  if (rcc_capture_info) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5009, rcc_capture_info_start, end);
++  }
+ 
++  if (rcc_capture_begin_total) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5005, rcc_capture_begin_total_start, end);
++  }
+ }
+ 
+ void CUDAGraph::capture_end() {
++  const bool rcc_capture_end_total =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5012);
++  const auto rcc_capture_end_total_start = rcc_capture_end_total
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   auto stream = at::cuda::getCurrentCUDAStream();
+ 
+   TORCH_CHECK(stream.stream() == capture_stream_.stream(),
+               "Capture must end on the same stream it began on.");
+ 
++  const bool rcc_stream_end =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5013);
++  const auto rcc_stream_end_start = rcc_stream_end
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   AT_CUDA_CHECK(cudaStreamEndCapture(capture_stream_, &graph_));
++  if (rcc_stream_end) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5013, rcc_stream_end_start, end);
++  }
+ 
++  const bool rcc_capture_allocate_end =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5014);
++  const auto rcc_capture_allocate_end_start = rcc_capture_allocate_end
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   c10::cuda::CUDACachingAllocator::endAllocateToPool(capture_dev_, mempool_id_);
+   at::getHostAllocator(at::kCUDA)->end_allocate_to_pool(mempool_id_);
++  if (rcc_capture_allocate_end) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5014, rcc_capture_allocate_end_start, end);
++  }
+ 
++  const bool rcc_capture_end_validate =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5015);
++  const auto rcc_capture_end_validate_start = rcc_capture_end_validate
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   TORCH_CHECK(graph_ != nullptr, "Invalid capture.");
+ 
+   for (auto& [generator_state, wholegraph_increments] :
+@@ -150,16 +232,32 @@ void CUDAGraph::capture_end() {
+ 
+   capture_ended_ = true;
+   has_graph_ = true;
++  if (rcc_capture_end_validate) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5015, rcc_capture_end_validate_start, end);
++  }
+   if (!keep_graph_) {
+     instantiate();
++    vllm::instrumentation::PublishReadCoreCycleTailBegin(700, 5017);
+     if (!_cuda_graphs_debug) {
+       AT_CUDA_CHECK(cudaGraphDestroy(graph_));
+     }
+     has_graph_ = false;
+   }
++  if (rcc_capture_end_total) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5012, rcc_capture_end_total_start, end);
++  }
+ }
+ 
+ void CUDAGraph::instantiate() {
++  const bool rcc_instantiate =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5016);
++  const auto rcc_instantiate_start = rcc_instantiate
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   TORCH_CHECK(capture_ended_, "capture_end() must have been called before calling instantiate");
+ 
+   if (has_graph_exec_) {
+@@ -187,25 +285,114 @@ void CUDAGraph::instantiate() {
+                                                 cudaGraphInstantiateFlagAutoFreeOnLaunch));
+ #endif
+   has_graph_exec_ = true;
++  if (rcc_instantiate) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5016, rcc_instantiate_start, end);
++  }
+ }
+ 
+ void CUDAGraph::replay() {
++  const bool rcc_replay_total =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5205);
++  const auto rcc_replay_total_start = rcc_replay_total
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  const bool rcc_replay_state =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5206);
++  const auto rcc_replay_state_start = rcc_replay_state
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   TORCH_CHECK(capture_ended_,
+               "Called CUDAGraph::replay without a preceding successful capture.");
+ 
+-  if (!has_graph_exec_) {
++  const bool needs_instantiate = !has_graph_exec_;
++  if (rcc_replay_state) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5206, rcc_replay_state_start, end);
++  }
++  if (needs_instantiate) {
++    const bool rcc_replay_instantiate =
++        vllm::instrumentation::ReadCoreCycleStageSelected(700, 5207);
++    const auto rcc_replay_instantiate_start = rcc_replay_instantiate
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
+     TORCH_INTERNAL_ASSERT(keep_graph_);
+     instantiate();
++    if (rcc_replay_instantiate) {
++      const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++      vllm::instrumentation::CommitReadCoreCyclePairedSample(
++          700, 5207, rcc_replay_instantiate_start, end);
++    }
+   }
+ 
++  const bool rcc_replay_device_guard =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5208);
++  const auto rcc_replay_device_guard_start = rcc_replay_device_guard
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   c10::OptionalDeviceGuard device_guard{capture_stream_.device()};
++  if (rcc_replay_device_guard) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5208, rcc_replay_device_guard_start, end);
++  }
+ 
++  const bool rcc_replay_rng =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5209);
++  const auto rcc_replay_rng_start = rcc_replay_rng
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   for (auto& [generator_state, wholegraph_increments] :
+        captured_generator_states_) {
+     generator_state->replay_prologue(wholegraph_increments);
+   }
++  if (rcc_replay_rng) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5209, rcc_replay_rng_start, end);
++  }
+   // graph_exec_ may be replayed in any stream.
+-  AT_CUDA_CHECK(cudaGraphLaunch(graph_exec_, at::cuda::getCurrentCUDAStream()));
++  const bool rcc_replay_stream =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5210);
++  const auto rcc_replay_stream_start = rcc_replay_stream
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  const auto replay_stream = at::cuda::getCurrentCUDAStream();
++  if (rcc_replay_stream) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5210, rcc_replay_stream_start, end);
++  }
++  const bool rcc_graph_launch =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5211);
++  const auto rcc_graph_launch_start = rcc_graph_launch
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  const cudaError_t launch_status = cudaGraphLaunch(graph_exec_, replay_stream);
++  if (rcc_graph_launch) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5211, rcc_graph_launch_start, end);
++  }
++  const bool rcc_graph_launch_check =
++      vllm::instrumentation::ReadCoreCycleStageSelected(700, 5212);
++  const auto rcc_graph_launch_check_start = rcc_graph_launch_check
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  AT_CUDA_CHECK(launch_status);
++  if (rcc_graph_launch_check) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5212, rcc_graph_launch_check_start, end);
++  }
++  vllm::instrumentation::PublishReadCoreCycleTailBegin(700, 5213);
++  if (rcc_replay_total) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        700, 5205, rcc_replay_total_start, end);
++  }
+ }
+ 
+ void CUDAGraph::enable_debug_mode() {
+diff --git a/aten/src/ATen/cuda/EmptyTensor.cpp b/aten/src/ATen/cuda/EmptyTensor.cpp
+index 5b96cda..c2dbc3d 100644
+--- a/aten/src/ATen/cuda/EmptyTensor.cpp
++++ b/aten/src/ATen/cuda/EmptyTensor.cpp
+@@ -2,6 +2,7 @@
+ #include <ATen/cuda/EmptyTensor.h>
+ #include <ATen/cuda/CUDAContext.h>
+ #include <ATen/EmptyTensor.h>
++#include "read_core_cycle_qwen3.h"
+ 
+ namespace at::detail {
+ 
+@@ -10,6 +11,8 @@ TensorBase empty_cuda(
+     ScalarType dtype,
+     std::optional<Device> device_opt,
+     std::optional<c10::MemoryFormat> memory_format_opt) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(2));
+   at::globalContext().lazyInitDevice(c10::DeviceType::CUDA);
+   const auto device = device_or_default(device_opt);
+   TORCH_INTERNAL_ASSERT(device.is_cuda());
+@@ -50,6 +53,8 @@ TensorBase empty_strided_cuda(
+     IntArrayRef stride,
+     ScalarType dtype,
+     std::optional<Device> device_opt) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(2));
+   at::globalContext().lazyInitDevice(c10::DeviceType::CUDA);
+   const auto device = device_or_default(device_opt);
+   TORCH_INTERNAL_ASSERT(device.is_cuda());
+diff --git a/aten/src/ATen/native/Copy.cpp b/aten/src/ATen/native/Copy.cpp
+index 0b3ffda..7596266 100644
+--- a/aten/src/ATen/native/Copy.cpp
++++ b/aten/src/ATen/native/Copy.cpp
+@@ -17,6 +17,7 @@
+ #include <ATen/NamedTensorUtils.h>
+ #include <ATen/Parallel.h>
+ #include <c10/util/irange.h>
++#include "read_core_cycle_qwen3.h"
+ 
+ #ifndef AT_PER_OPERATOR_HEADERS
+ #include <ATen/Functions.h>
+@@ -138,6 +139,8 @@ bool is_supported_device(Device device) {
+ namespace at::native {
+ 
+ static Tensor & copy_impl(Tensor & self, const Tensor & src, bool non_blocking) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_impl(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 2));
+   // TODO: this should be handled during dispatch, but that's missing...
+   TORCH_CHECK(self.defined(), "self is undefined");
+   TORCH_CHECK(src.defined(), "src is undefined");
+@@ -269,6 +272,8 @@ static Tensor & copy_impl(Tensor & self, const Tensor & src, bool non_blocking)
+   }
+ 
+ 
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_iter(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 3));
+   auto iter = TensorIteratorConfig()
+     .add_output(self)
+     .add_const_input(src)
+@@ -276,11 +281,14 @@ static Tensor & copy_impl(Tensor & self, const Tensor & src, bool non_blocking)
+     .check_all_same_dtype(false)
+     .check_all_same_device(false)
+     .build();
++  rcc_qwen3_iter.Finish();
+ 
+   if (iter.numel() == 0) {
+     return self;
+   }
+ 
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_dispatch(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 4));
+   DeviceType device_type = iter.device_type(0);
+   if (iter.device_type(1) == kCUDA) {
+     device_type = kCUDA;
+@@ -351,6 +359,8 @@ Tensor copy(const Tensor& self, const Tensor& src, bool non_blocking) {
+ }
+ 
+ Tensor& copy_(Tensor& self, const Tensor& src, bool non_blocking) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_entry(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 1));
+   auto maybe_outnames = namedinference::compute_broadcast_outnames(self, src);
+   {
+     NoNamesGuard guard;
+@@ -362,6 +372,8 @@ Tensor& copy_(Tensor& self, const Tensor& src, bool non_blocking) {
+     }
+     copy_impl(self, src, non_blocking);
+   }
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_return(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 14));
+   namedinference::propagate_names_if_nonempty(self, maybe_outnames);
+   return self;
+ }
+diff --git a/aten/src/ATen/native/cuda/Blas.cpp b/aten/src/ATen/native/cuda/Blas.cpp
+index 4a03faa..7bc4e94 100644
+--- a/aten/src/ATen/native/cuda/Blas.cpp
++++ b/aten/src/ATen/native/cuda/Blas.cpp
+@@ -23,6 +23,7 @@
+ #include <ATen/native/cuda/ScaledGroupMM.h>
+ #include <ATen/native/cuda/GroupMM.h>
+ #include <ATen/ceil_div.h>
++#include <read_core_cycle_runtime.h>
+ 
+ #ifdef USE_MSLK
+ #include <mslk/gemm/gemm_torch.h>
+@@ -93,6 +94,91 @@ c10::MaybeOwned<Tensor> prepare_batch_matrix_for_cublas(const Tensor& tensor, bo
+ 
+ namespace {
+ 
++constexpr std::uint16_t kRccGraphSite = 700;
++
++inline thread_local std::uint16_t rcc_qwen3_qkv_total_occurrence{0};
++
++std::uint16_t rcc_qwen3_gemm_total_stage(
++    const Tensor& mat1,
++    const Tensor& mat2) {
++  if (!vllm::instrumentation::ReadCoreCycleSiteSelected(kRccGraphSite) ||
++      mat1.dim() != 2 || mat2.dim() != 2) {
++    return 0;
++  }
++  const auto stage =
++      vllm::instrumentation::read_core_cycle_selection.exact_stage;
++  if (stage != 1001 && stage != 1060 && stage != 1062 &&
++      stage != 1064 && stage != 1066) {
++    return 0;
++  }
++  const auto k = mat1.size(1);
++  const auto n = mat2.size(1);
++  if (k == 4096 && n == 6144) {
++    ++rcc_qwen3_qkv_total_occurrence;
++    if (stage == 1001 && rcc_qwen3_qkv_total_occurrence == 1) {
++      return stage;
++    }
++    if (stage == 1066 && rcc_qwen3_qkv_total_occurrence > 1) {
++      return stage;
++    }
++    return 0;
++  }
++  if ((stage == 1060 && k == 4096 && n == 4096) ||
++      (stage == 1062 && k == 4096 && n == 24576) ||
++      (stage == 1064 && k == 12288 && n == 4096)) {
++    return stage;
++  }
++  return 0;
++}
++
++class RccQwen3GemmTotalGuard final {
++ public:
++  RccQwen3GemmTotalGuard(const Tensor& mat1, const Tensor& mat2)
++      : stage_(rcc_qwen3_gemm_total_stage(mat1, mat2)) {
++    if (stage_ != 0) {
++      begin_ = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    }
++  }
++
++  ~RccQwen3GemmTotalGuard() {
++    if (stage_ != 0) {
++      const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++      vllm::instrumentation::CommitReadCoreCyclePairedSample(
++          kRccGraphSite, stage_, begin_, end);
++    }
++  }
++
++  RccQwen3GemmTotalGuard(const RccQwen3GemmTotalGuard&) = delete;
++  RccQwen3GemmTotalGuard& operator=(const RccQwen3GemmTotalGuard&) = delete;
++
++ private:
++  std::uint16_t stage_{0};
++  vllm::instrumentation::ReadCoreCycleBoundary begin_{};
++};
++
++std::uint16_t rcc_qwen3_gemm_stage_base(
++    const Tensor& mat1,
++    const Tensor& mat2) {
++  if (mat1.dim() != 2 || mat2.dim() != 2) {
++    return 0;
++  }
++  const auto k = mat1.size(1);
++  const auto n = mat2.size(1);
++  if (k == 4096 && n == 6144) {
++    return 6100;
++  }
++  if (k == 4096 && n == 4096) {
++    return 6200;
++  }
++  if (k == 4096 && n == 24576) {
++    return 6300;
++  }
++  if (k == 12288 && n == 4096) {
++    return 6400;
++  }
++  return 0;
++}
++
+ enum class Activation {
+   None,
+   RELU,
+@@ -341,6 +427,17 @@ bool launchGemmCublas(
+ }
+ 
+ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& mat1, const Tensor& mat2, const Scalar& beta, const Scalar& alpha, Activation activation=Activation::None, bool disable_addmm_cuda_lt_override=false) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  const auto rcc_stage_base = rcc_qwen3_gemm_stage_base(mat1, mat2);
++  const auto rcc_s01_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 1);
++  const bool rcc_record_s01 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s01_stage);
++  const auto rcc_s01_begin = rcc_record_s01
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+   // Shape checks {
+   // Make sure to keep addmm_cuda below in sync with this code; it
+   // preflights a check to try to avoid actually needing to call
+@@ -362,6 +459,31 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
+   TensorArg targs[]{{result, "out", 0}, {self, "self", 1}, {mat1, "mat1", 2}, {mat2, "mat2", 3}};
+   checkAllSameGPU(__func__, targs);
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s01) {
++    const auto rcc_s01_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s01_stage, rcc_s01_begin, rcc_s01_end);
++  }
++  const auto rcc_s02_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 2);
++  const bool rcc_record_s02 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s02_stage);
++  const auto rcc_s02_begin = rcc_record_s02
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  const auto rcc_finish_s02 = [&]() {
++    if (rcc_record_s02) {
++      const auto rcc_s02_end =
++          vllm::instrumentation::ReadCoreCycleBoundaryNow();
++      vllm::instrumentation::CommitReadCoreCyclePairedSample(
++          kRccGraphSite, rcc_s02_stage, rcc_s02_begin, rcc_s02_end);
++    }
++  };
++#endif
++
+   // Handle whether to use the Lt interface {
+   static bool persistent_disable_addmm_cuda_lt = isGloballyDisabledAddmmCudaLt(self.device());
+   // if lt path fails, we recurse back into this function here and force the lt path to off
+@@ -398,6 +520,9 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
+ 
+   // Short circuit on empty result
+   if (result.numel() == 0) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    rcc_finish_s02();
++#endif
+     return result;
+   }
+ 
+@@ -406,11 +531,14 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
+     // By definition, when beta==0, values in self should be ignored. nans and infs
+     // should not propagate
+     if (beta.toComplexDouble() == 0.) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++      rcc_finish_s02();
++#endif
+       return result.zero_();
+     }
+     // TODO: We could squeeze some perf by calling at::cuda::mul_out here instead, to bypass the dispatcher.
+     // That requires some fixing some internal build dependencies though.
+-    return at::mul_out(
++    auto& rcc_empty_reduction_result = at::mul_out(
+         result,
+         self.expand(result.sizes()),
+         at::native::scalar_tensor(
+@@ -421,10 +549,41 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
+           std::nullopt /* pin_memory */
+         )
+     );
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    rcc_finish_s02();
++#endif
++    return rcc_empty_reduction_result;
+   }
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  rcc_finish_s02();
++  const auto rcc_s03_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 3);
++  const bool rcc_record_s03 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s03_stage);
++  const auto rcc_s03_begin = rcc_record_s03
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+   cublasCommonArgs args(mat1, mat2, result);
+   TORCH_INTERNAL_ASSERT_DEBUG_ONLY(!args.result->is_conj());
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s03) {
++    const auto rcc_s03_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s03_stage, rcc_s03_begin, rcc_s03_end);
++  }
++  const auto rcc_s04_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 4);
++  const bool rcc_record_s04 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s04_stage);
++  const auto rcc_s04_begin = rcc_record_s04
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+ 
+   // The Lt path
+   if (!disable_addmm_cuda_lt) {
+@@ -498,6 +657,23 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
+     }
+   } // end GEMM path
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s04) {
++    const auto rcc_s04_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s04_stage, rcc_s04_begin, rcc_s04_end);
++  }
++  const auto rcc_s12_stage =
++      static_cast<std::uint16_t>(rcc_stage_base + 12);
++  const bool rcc_record_s12 = rcc_stage_base != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccGraphSite, rcc_s12_stage);
++  const auto rcc_s12_begin = rcc_record_s12
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
++
+ // Preprocessor gate here needs to match the inverse of the check
+ // gating activation_to_gemm_and_blas_arg above; here we are manually
+ // performing a post-GELU because we weren't able to use the GELU
+@@ -511,6 +687,14 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
+   if (!result.is_same(*args.result)) {
+     result.copy_(*args.result);
+   }
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  if (rcc_record_s12) {
++    const auto rcc_s12_end =
++        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccGraphSite, rcc_s12_stage, rcc_s12_begin, rcc_s12_end);
++  }
++#endif
+   return result;
+ }
+ 
+@@ -647,6 +831,9 @@ TORCH_IMPL_FUNC(addmm_activation_out_cuda)(const Tensor& self, const Tensor& mat
+ }
+ 
+ TORCH_IMPL_FUNC(mm_out_cuda)(const Tensor& self, const Tensor& mat2, const Tensor& result) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  RccQwen3GemmTotalGuard rcc_qwen3_gemm_total_guard(self, mat2);
++#endif
+   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+   addmm_out_cuda_impl(const_cast<Tensor&>(result), result, self, mat2, 0, 1);
+ }
+diff --git a/aten/src/ATen/native/cuda/CUDALoops.cuh b/aten/src/ATen/native/cuda/CUDALoops.cuh
+index b1031a9..160a4d1 100644
+--- a/aten/src/ATen/native/cuda/CUDALoops.cuh
++++ b/aten/src/ATen/native/cuda/CUDALoops.cuh
+@@ -39,6 +39,7 @@
+ #include <c10/core/ScalarType.h>
+ #include <c10/macros/Macros.h>
+ #include <c10/util/TypeCast.h>
++#include "read_core_cycle_qwen3.h"
+ 
+ #ifdef __NVCC__
+ #define ASSERT_HOST_DEVICE_LAMBDA(type)                       \
+@@ -331,30 +332,65 @@ static inline void launch_vectorized_kernel(
+       C10_CUDA_KERNEL_LAUNCH_CHECK();
+       break;
+ #endif
+-    case 8:
++    case 8: {
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++          vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 11));
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_launch(
++          vllm::instrumentation::ReadCoreCycleQwen3FillStageId(3));
+       vectorized_elementwise_kernel<8, func_t, array_t>
+           <<<grid, num_threads(), 0, stream>>>(N, f, data);
++      rcc_qwen3_stage.Finish();
++      rcc_qwen3_fill_launch.Finish();
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_status(
++          vllm::instrumentation::ReadCoreCycleQwen3FillStageId(4));
+       C10_CUDA_KERNEL_LAUNCH_CHECK();
+       break;
+-    case 4:
++    }
++    case 4: {
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++          vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 11));
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_launch(
++          vllm::instrumentation::ReadCoreCycleQwen3FillStageId(3));
+       vectorized_elementwise_kernel<4, func_t, array_t>
+           <<<grid, num_threads(), 0, stream>>>(N, f, data);
++      rcc_qwen3_stage.Finish();
++      rcc_qwen3_fill_launch.Finish();
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_status(
++          vllm::instrumentation::ReadCoreCycleQwen3FillStageId(4));
+       C10_CUDA_KERNEL_LAUNCH_CHECK();
+       break;
+-    case 2:
++    }
++    case 2: {
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++          vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 11));
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_launch(
++          vllm::instrumentation::ReadCoreCycleQwen3FillStageId(3));
+       vectorized_elementwise_kernel<2, func_t, array_t>
+           <<<grid, num_threads(), 0, stream>>>(N, f, data);
++      rcc_qwen3_stage.Finish();
++      rcc_qwen3_fill_launch.Finish();
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_status(
++          vllm::instrumentation::ReadCoreCycleQwen3FillStageId(4));
+       C10_CUDA_KERNEL_LAUNCH_CHECK();
+       break;
++    }
+     case 1: {
+       auto input_calc = TrivialOffsetCalculator<traits::arity>();
+       auto output_calc = TrivialOffsetCalculator<1>();
+       auto loader = memory::LoadWithoutCast();
+       auto storer = memory::StoreWithoutCast();
+       int64_t grid_unrolled = (N + elementwise_block_work_size() - 1) / elementwise_block_work_size();
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++          vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 11));
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_launch(
++          vllm::instrumentation::ReadCoreCycleQwen3FillStageId(3));
+       unrolled_elementwise_kernel<func_t, array_t, elementwise_thread_work_size()>
+           <<<grid_unrolled, num_threads(), 0, stream>>>(
+               N, f, data, input_calc, output_calc, loader, storer);
++      rcc_qwen3_stage.Finish();
++      rcc_qwen3_fill_launch.Finish();
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_status(
++          vllm::instrumentation::ReadCoreCycleQwen3FillStageId(4));
+       C10_CUDA_KERNEL_LAUNCH_CHECK();
+       break;
+     }
+@@ -516,8 +552,16 @@ static inline void launch_unrolled_kernel(
+ 
+   int64_t grid = (N + elementwise_block_work_size() - 1) / elementwise_block_work_size();
+   auto stream = at::cuda::getCurrentCUDAStream();
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 11));
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_launch(
++      vllm::instrumentation::ReadCoreCycleQwen3FillStageId(3));
+   unrolled_elementwise_kernel<func_t, array_t, elementwise_thread_work_size()>
+       <<<grid, num_threads(), 0, stream>>>(N, f, data, ic, oc, l, s);
++  rcc_qwen3_stage.Finish();
++  rcc_qwen3_fill_launch.Finish();
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_status(
++      vllm::instrumentation::ReadCoreCycleQwen3FillStageId(4));
+   C10_CUDA_KERNEL_LAUNCH_CHECK();
+ }
+ 
+@@ -545,7 +589,15 @@ static void launch_legacy_kernel(int64_t N, const func_t& f) {
+   dim3 block(nt);
+   dim3 grid((N + block.x * vt - 1) / (block.x * vt));
+   auto stream = at::cuda::getCurrentCUDAStream();
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 11));
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_launch(
++      vllm::instrumentation::ReadCoreCycleQwen3FillStageId(3));
+   elementwise_kernel<nt, vt, func_t><<<grid, block, 0, stream>>>(N, f);
++  rcc_qwen3_stage.Finish();
++  rcc_qwen3_fill_launch.Finish();
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_status(
++      vllm::instrumentation::ReadCoreCycleQwen3FillStageId(4));
+   C10_CUDA_KERNEL_LAUNCH_CHECK();
+ }
+ 
+diff --git a/aten/src/ATen/native/cuda/Copy.cu b/aten/src/ATen/native/cuda/Copy.cu
+index 9e78d2e..b513949 100644
+--- a/aten/src/ATen/native/cuda/Copy.cu
++++ b/aten/src/ATen/native/cuda/Copy.cu
+@@ -20,6 +20,7 @@
+ #include <c10/cuda/CUDACachingAllocator.h>
+ #include <c10/cuda/CUDAStream.h>
+ #include <ATen/cuda/CUDAGraphsUtils.cuh>
++#include "read_core_cycle_qwen3.h"
+ 
+ // TODO(NS): Investigate why FP8 conversion intrinsics end up being slower
+ #ifdef AT_USE_NV_CVT_INTRINSICS
+@@ -201,6 +202,8 @@ void float8_copy_kernel_cuda(TensorIteratorBase &iter) {
+ // TODO: We probably can use the opaque type trick to avoid creating duplicate
+ // kernels for equivalent bit lengths
+ void direct_copy_kernel_cuda(TensorIteratorBase &iter) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 8));
+   ScalarType dtype = iter.dtype(0);
+   if (isQIntType(dtype)) {
+     AT_DISPATCH_QINT_TYPES(dtype, "copy_", [&] {
+@@ -254,6 +257,8 @@ using namespace at::cuda;
+ void copy_device_to_device(TensorIterator& iter,
+                            bool non_blocking,
+                            bool p2p_enabled) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 6));
+   int64_t numel = iter.numel();
+ 
+   // We can memcpy the memory if both tensors have the same type AND both
+@@ -275,6 +280,8 @@ void copy_device_to_device(TensorIterator& iter,
+   // cudaMemcpyAsync on the default stream.
+   CUDAStream copy_stream = getCurrentCUDAStream(src_device.index());
+   if (src_device != dst_device) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_event(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 7));
+     // This is a cross-device copy on the src current stream and dst current
+     // stream. We perform a two-way barrier between both devices' streams
+     // before the copy. This ensures that any write-after-write and
+@@ -301,10 +308,13 @@ void copy_device_to_device(TensorIterator& iter,
+       // peer-to-peer-capable need "cudaMemcpyPeerAsync".
+       // So we let the allocator implement the correct call
+       // (either cudaMemcpyAsync or cudaMemcpyPeerAsync)
++      vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_memcpy(
++          vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 10));
+       AT_CUDA_CHECK(CUDACachingAllocator::memcpyAsync(
+         dst, dst_device.index(),
+         src, src_device.index(),
+         size, copy_stream, p2p_enabled));
++      rcc_qwen3_memcpy.Finish();
+     }
+   } else {
+     if (same_neg) {
+@@ -323,6 +333,8 @@ void copy_device_to_device(TensorIterator& iter,
+   }
+ 
+   if (src_device != dst_device) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_event(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 13));
+     // dst waits on src barrier (dst already waits on dst). We cannot
+     // operate on dst's copy until the copy is complete.
+ 
+@@ -334,7 +346,10 @@ void copy_device_to_device(TensorIterator& iter,
+     src_ready->block(getCurrentCUDAStream(dst_device.index()));
+   }
+ 
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_status(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 12));
+   AT_CUDA_CHECK(cudaGetLastError());
++  rcc_qwen3_status.Finish();
+ }
+ 
+ static bool copy_requires_temporaries(TensorIterator& iter, bool p2p_enabled) {
+@@ -369,6 +384,8 @@ static bool maybe_enable_p2p_access(Device dst_device, Device src_device) {
+ }
+ 
+ static void copy_kernel_cuda(TensorIterator& iter, bool non_blocking) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 5));
+   TORCH_CHECK(iter.ntensors() == 2);
+ 
+   Device dst_device = iter.device(0);
+@@ -455,7 +472,10 @@ static void copy_kernel_cuda(TensorIterator& iter, bool non_blocking) {
+   CUDAStream stream = getCurrentCUDAStream();
+ 
+   if (non_blocking) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_memcpy(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 10));
+     AT_CUDA_CHECK(cudaMemcpyAsync(dst, src, nbytes, kind, stream));
++    rcc_qwen3_memcpy.Finish();
+     // we use both the storage context and the tensor data pointer as the key
+     // for the caching host allocator. This allows us to better attribute the
+     // events to the original tensor allocation correctly. The cases we seek to
+diff --git a/aten/src/ATen/native/cuda/FillKernel.cu b/aten/src/ATen/native/cuda/FillKernel.cu
+index 266f0e4..07ec743 100644
+--- a/aten/src/ATen/native/cuda/FillKernel.cu
++++ b/aten/src/ATen/native/cuda/FillKernel.cu
+@@ -6,6 +6,7 @@
+ #include <ATen/native/TensorIterator.h>
+ #include <ATen/native/Fill.h>
+ #include <c10/core/Scalar.h>
++#include "read_core_cycle_qwen3.h"
+ 
+ namespace at::native {
+ 
+@@ -20,6 +21,8 @@ struct FillFunctor {
+ };
+ 
+ void fill_kernel_cuda(TensorIterator& iter, const Scalar& value) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3FillStageId(2));
+   AT_DISPATCH_V2(iter.dtype(), "fill_cuda", AT_WRAP([&]() {
+     gpu_kernel(iter, FillFunctor<scalar_t>(value.to<scalar_t>()));
+   }), AT_EXPAND(AT_ALL_TYPES_AND_COMPLEX), kComplexHalf, kBool, kHalf, kBFloat16, AT_EXPAND(AT_FLOAT8_TYPES), AT_EXPAND(AT_BAREBONES_UNSIGNED_TYPES));
+diff --git a/aten/src/ATen/native/cuda/Loops.cuh b/aten/src/ATen/native/cuda/Loops.cuh
+index a80c51f..8a8b3e1 100644
+--- a/aten/src/ATen/native/cuda/Loops.cuh
++++ b/aten/src/ATen/native/cuda/Loops.cuh
+@@ -9,6 +9,7 @@
+ #include <ATen/native/cuda/MemoryAccess.cuh>
+ 
+ #include <tuple>
++#include "read_core_cycle_qwen3.h"
+ 
+ 
+ 
+@@ -81,6 +82,8 @@ namespace at:: native {
+ 
+ template <typename func_t>
+ void gpu_kernel_nocast(TensorIteratorBase& iter, const func_t& f) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 9));
+ 
+   for (int arg = 0; arg < iter.ntensors(); arg++) {
+     TORCH_INTERNAL_ASSERT(
+@@ -104,6 +107,8 @@ void gpu_kernel_nocast(TensorIteratorBase& iter, const func_t& f) {
+ 
+ template <typename func_t>
+ void gpu_kernel(TensorIteratorBase& iter, const func_t& f) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1057, 9));
+ 
+   for (int arg = 0; arg < iter.ntensors(); arg++) {
+     TORCH_INTERNAL_ASSERT(
+diff --git a/aten/src/ATen/native/cuda/TensorFactories.cu b/aten/src/ATen/native/cuda/TensorFactories.cu
+index 334b1e8..ebe3696 100644
+--- a/aten/src/ATen/native/cuda/TensorFactories.cu
++++ b/aten/src/ATen/native/cuda/TensorFactories.cu
+@@ -10,6 +10,7 @@
+ #include <c10/util/accumulate.h>
+ #include <c10/util/Exception.h>
+ #include <ATen/native/cuda/Loops.cuh>
++#include "read_core_cycle_qwen3.h"
+ 
+ #ifndef AT_PER_OPERATOR_HEADERS
+ #include <ATen/Functions.h>
+@@ -52,6 +53,8 @@ Tensor& eye_out_cuda(int64_t n, int64_t m, Tensor& result) {
+ }
+ 
+ Tensor empty_cuda(IntArrayRef size, std::optional<ScalarType> dtype_opt, std::optional<Layout> layout_opt, std::optional<Device> device_opt, std::optional<bool> pin_memory_opt, std::optional<c10::MemoryFormat> memory_format_opt) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1));
+   Tensor result = at::detail::empty_cuda(size, dtype_opt, layout_opt, device_opt, pin_memory_opt, memory_format_opt);
+   // See Note [Enabling Deterministic Operations]
+   if (C10_UNLIKELY(at::globalContext().deterministicAlgorithms() && at::globalContext().deterministicFillUninitializedMemory())) {
+@@ -78,6 +81,8 @@ Tensor _efficientzerotensor_cuda(IntArrayRef size,
+ 
+ 
+ Tensor empty_strided_cuda(IntArrayRef size, IntArrayRef stride, std::optional<ScalarType> dtype_opt, std::optional<Layout> layout_opt, std::optional<Device> device_opt, std::optional<bool> pin_memory_opt) {
++  vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++      vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(1));
+   Tensor result = at::detail::empty_strided_cuda(size, stride, dtype_opt, layout_opt, device_opt, pin_memory_opt);
+   // See Note [Enabling Deterministic Operations]
+   if (C10_UNLIKELY(at::globalContext().deterministicAlgorithms() && at::globalContext().deterministicFillUninitializedMemory())) {
+diff --git a/c10/cuda/CUDACachingAllocator.cpp b/c10/cuda/CUDACachingAllocator.cpp
+index 2ab4eff..f6308a8 100644
+--- a/c10/cuda/CUDACachingAllocator.cpp
++++ b/c10/cuda/CUDACachingAllocator.cpp
+@@ -39,6 +39,7 @@
+ #include <thread>
+ #include <utility>
+ #include <vector>
++#include "read_core_cycle_qwen3.h"
+ 
+ TORCH_SDT_DEFINE_SEMAPHORE(malloc)
+ TORCH_SDT_DEFINE_SEMAPHORE(free)
+@@ -1047,7 +1048,11 @@ cudaError_t allocPrimitive(void** ptr, size_t size, AllocParams& p) {
+     *ptr = p.pool->owner_PrivatePool->allocator()->raw_alloc(size);
+     return *ptr ? cudaSuccess : cudaErrorMemoryAllocation;
+   } else {
+-    return C10_CUDA_ERROR_HANDLED(cudaMalloc(ptr, size));
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(10));
++    const auto result = C10_CUDA_ERROR_HANDLED(cudaMalloc(ptr, size));
++    rcc_qwen3_stage.Finish();
++    return result;
+   }
+ }
+ 
+@@ -1398,6 +1403,8 @@ class DeviceCachingAllocator {
+   // Thus, do not call a public method from another public method.
+ 
+   Block* malloc(size_t orig_size, cudaStream_t stream) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(6));
+     // done outside the lock because we don't know what locks the recorder needs
+     // to have...
+     auto context = maybeGatherContext(RecordContext::STATE);
+@@ -1643,6 +1650,8 @@ class DeviceCachingAllocator {
+       size_t orig_size,
+       std::shared_ptr<GatheredContext> context,
+       bool split_remainder) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(9));
+     auto size = params.size();
+     auto device = params.device();
+     auto pool = params.pool;
+@@ -3073,6 +3082,8 @@ class DeviceCachingAllocator {
+   }
+ 
+   BlockPool& get_pool(size_t size, cudaStream_t stream) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(7));
+     // captures_underway is a conservative guess that the current stream may be
+     // capturing. It's only non-empty if some thread has begun and not yet ended
+     // a capture, so it's usually 0, and we can short-circuit
+@@ -3138,6 +3149,8 @@ class DeviceCachingAllocator {
+   }
+ 
+   bool get_free_block(AllocParams& p) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(8));
+     BlockPool& pool = *p.pool;
+ 
+     if (C10_UNLIKELY(
+@@ -3275,6 +3288,8 @@ class DeviceCachingAllocator {
+       bool isRetry,
+       const std::shared_ptr<GatheredContext>& ctx,
+       std::unique_lock<std::recursive_mutex>& lock) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(11));
+     // Defensively checks for preexisting CUDA error state.
+     C10_CUDA_CHECK(cudaGetLastError());
+ 
+@@ -4262,6 +4277,8 @@ class NativeCachingAllocator : public CUDAAllocator {
+   }
+ 
+   DataPtr allocate(size_t size) override {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_stage(
++        vllm::instrumentation::ReadCoreCycleQwen3LeafStageId(5));
+     constexpr size_t one_exa_bytes = 1152921504606846976ULL;
+     TORCH_CHECK_WITH(
+         OutOfMemoryError,
+diff --git a/torch/_inductor/runtime/static_triton_launcher.py b/torch/_inductor/runtime/static_triton_launcher.py
+index 5aaaf4f..5d99e8a 100644
+--- a/torch/_inductor/runtime/static_triton_launcher.py
++++ b/torch/_inductor/runtime/static_triton_launcher.py
+@@ -1,4 +1,6 @@
+ import functools
++import hashlib
++import json
+ import os
+ from functools import cached_property
+ from typing import Any
+@@ -9,6 +11,68 @@ from .triton_compat import ASTSource, CompiledKernel, knobs as triton_knobs
+ from .triton_helpers import get_constexprs
+ 
+ 
++_RCC_QWEN3_GRAPH_STAGE = {
++    "triton_red_fused__to_copy_embedding_rms_norm_0": (9000, 1000),
++    "triton_red_fused_1": (9100, 1002),
++    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_2": (  # noqa: E501
++        9200,
++        1003,
++    ),
++    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_3": (  # noqa: E501
++        9300,
++        1004,
++    ),
++    "triton_red_fused_3": (9400, 1067),
++    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_4": (  # noqa: E501
++        9500,
++        1068,
++    ),
++    "triton_poi_fused_add_index_select_mul_rms_norm_split_split_with_sizes_sub_unsqueeze_view_5": (  # noqa: E501
++        9600,
++        1069,
++    ),
++    "triton_red_fused_fused_add_rms_norm_0": (9700, 1061),
++    "triton_poi_fused_mul_silu_slice_1": (9800, 1063),
++}
++
++
++def _rcc_stage_identity(name: str, arg_names: list[str]) -> tuple[int, int]:
++    if name != "triton_red_fused_fused_add_rms_norm_2":
++        return _RCC_QWEN3_GRAPH_STAGE.get(name, (0, 0))
++    if arg_names and arg_names[0] == "in_out_ptr0":
++        return (10000, 1070)
++    if (
++        arg_names
++        and arg_names[0] == "in_ptr0"
++        and "out_ptr1" in arg_names
++        and "out_ptr2" in arg_names
++    ):
++        return (9900, 1065)
++    raise RuntimeError(
++        "Unrecognized triton_red_fused_fused_add_rms_norm_2 signature: "
++        f"{arg_names}"
++    )
++
++
++def _rcc_sha256(path: str) -> str | None:
++    if not path or not os.path.isfile(path):
++        return None
++    digest = hashlib.sha256()
++    with open(path, "rb") as handle:
++        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
++            digest.update(chunk)
++    return digest.hexdigest()
++
++
++def _rcc_append_jsonl(environment_name: str, record: dict[str, Any]) -> None:
++    path = os.environ.get(environment_name)
++    if not path:
++        return
++    os.makedirs(os.path.dirname(path), exist_ok=True)
++    with open(path, "a", encoding="utf-8") as handle:
++        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
++
++
+ class StaticallyLaunchedTritonKernel:
+     """
+     Parses the metadata of a CompiledKernel from Triton into a structure that can
+@@ -49,6 +113,9 @@ class StaticallyLaunchedTritonKernel:
+         # Used by torch.compile to filter constants in older triton versions
+         # pyrefly: ignore [missing-attribute]
+         self.arg_names = kernel.src.fn.arg_names
++        self.rcc_stage_base, self.rcc_operator_stage = _rcc_stage_identity(
++            self.name, self.arg_names
++        )
+ 
+         # Const exprs that are declared by the triton kernel directly
+         # Used to generate the kernel launcher's def args
+@@ -107,6 +174,8 @@ class StaticallyLaunchedTritonKernel:
+         self.has_global_scratch = needs_scratch_arg("Global", "global_scratch_size")
+         # same situation for profile scratch - triton-lang/triton#7258
+         self.has_profile_scratch = needs_scratch_arg("Profile", "profile_scratch_size")
++        self.global_scratch_size = getattr(kernel.metadata, "global_scratch_size", 0)
++        self.profile_scratch_size = getattr(kernel.metadata, "profile_scratch_size", 0)
+ 
+         # pyrefly: ignore [missing-attribute]
+         self.arg_tys = self.arg_ty_from_signature(kernel.src)
+@@ -121,6 +190,25 @@ class StaticallyLaunchedTritonKernel:
+             raise NotImplementedError(
+                 "Static cuda launcher only supports num_ctas == 1"
+             )
++        if self.rcc_stage_base:
++            _rcc_append_jsonl(
++                "RCC_TRITON_STATIC_BUILD_MAP",
++                {
++                    "evidence_type": "static_launcher_build",
++                    "kernel_name": self.name,
++                    "operator_stage": self.rcc_operator_stage,
++                    "stage_base": self.rcc_stage_base,
++                    "argument_names": self.arg_names,
++                    "kernel_hash": str(self.hash),
++                    "cubin_path": self.cubin_path,
++                    "cubin_sha256": _rcc_sha256(self.cubin_path),
++                    "global_scratch_size": self.global_scratch_size,
++                    "profile_scratch_size": self.profile_scratch_size,
++                    "static_launcher_python_path": os.path.realpath(__file__),
++                    "static_launcher_python_sha256": _rcc_sha256(__file__),
++                    "pid": os.getpid(),
++                },
++            )
+ 
+     def reload_cubin_from_raw(self, filepath: str) -> str:
+         """
+@@ -224,6 +312,7 @@ class StaticallyLaunchedTritonKernel:
+         # Remove objects that are no longer valid for pickling
+         state = self.__dict__.copy()
+         state["function"] = None
++        state["_rcc_runtime_evidence_written"] = False
+         # Cubin paths aren't consistent across processes, so we clear
+         # and reload them.
+         state["cubin_path"] = None
+@@ -242,6 +331,29 @@ class StaticallyLaunchedTritonKernel:
+         # Assert load_kernel() has been called and args match
+         assert self.function is not None
+ 
++        if self.rcc_stage_base and not getattr(
++            self, "_rcc_runtime_evidence_written", False
++        ):
++            _rcc_append_jsonl(
++                "RCC_TRITON_STATIC_RUNTIME_MAP",
++                {
++                    "evidence_type": "static_launcher_first_unarmed_execution",
++                    "kernel_name": self.name,
++                    "operator_stage": self.rcc_operator_stage,
++                    "stage_base": self.rcc_stage_base,
++                    "argument_names": self.arg_names,
++                    "kernel_hash": str(self.hash),
++                    "function_pointer": int(self.function),
++                    "arg_types": self.arg_tys,
++                    "global_scratch_size": self.global_scratch_size,
++                    "profile_scratch_size": self.profile_scratch_size,
++                    "static_launcher_python_path": os.path.realpath(__file__),
++                    "static_launcher_python_sha256": _rcc_sha256(__file__),
++                    "pid": os.getpid(),
++                },
++            )
++            self._rcc_runtime_evidence_written = True
++
+         # TODO: actually, if the args *don't* match, we probably should
+         # throw an exception. But if inductor is the only one calling this
+         # thing, it should always match.
+@@ -298,6 +410,8 @@ class StaticallyLaunchedTritonKernel:
+             arg_tys,
+             args,
+             stream,
++            self.rcc_stage_base,
++            self.rcc_operator_stage,
+         )
+ 
+ 
+diff --git a/torch/csrc/cuda/Graph.cpp b/torch/csrc/cuda/Graph.cpp
+index 2a551ae..32b04f8 100644
+--- a/torch/csrc/cuda/Graph.cpp
++++ b/torch/csrc/cuda/Graph.cpp
+@@ -8,6 +8,8 @@
+ #include <ATen/cuda/CUDAGraph.h>
+ #include <c10/cuda/CUDAGraphsC10Utils.h>
+ 
++#include "read_core_cycle_runtime.h"
++
+ // Cargo culted partially from csrc/distributed/c10d/init.cpp
+ // and partially from csrc/cuda/Stream.cpp.
+ // THCPStream_init is also declared at global scope.
+@@ -24,6 +26,15 @@ void THCPGraph_init(PyObject* module) {
+   auto torch_C_m = py::handle(module).cast<py::module>();
+ 
+   torch_C_m.def("_graph_pool_handle", &::at::cuda::graph_pool_handle);
++  torch_C_m.def("_rcc_stage_begin", [](std::uint16_t stage_id) {
++    vllm::instrumentation::PublishReadCoreCycleTailBegin(700, stage_id);
++  });
++  torch_C_m.def("_rcc_stage_end", [](std::uint16_t stage_id) {
++    if (vllm::instrumentation::
++            read_core_cycle_selection.published_tail_stage == stage_id) {
++      vllm::instrumentation::CommitPublishedReadCoreCycleTail(700);
++    }
++  });
+ 
+   shared_ptr_class_<::at::cuda::CUDAGraph>(torch_C_m, "_CUDAGraph")
+       .def(py::init<bool>(), py::arg("keep_graph") = false)
+@@ -71,7 +82,13 @@ void THCPGraph_init(PyObject* module) {
+           py::arg("generator"))
+       .def(
+           "replay",
+-          torch::wrap_pybind_function_no_gil(&at::cuda::CUDAGraph::replay))
++          [](::at::cuda::CUDAGraph& self) {
++            {
++              py::gil_scoped_release release;
++              self.replay();
++            }
++            vllm::instrumentation::CommitPublishedReadCoreCycleTail(700);
++          })
+       .def(
+           "reset",
+           torch::wrap_pybind_function_no_gil(&at::cuda::CUDAGraph::reset))
+diff --git a/torch/csrc/inductor/static_launcher/cuda.cpp b/torch/csrc/inductor/static_launcher/cuda.cpp
+index a2378b7..4399b23 100644
+--- a/torch/csrc/inductor/static_launcher/cuda.cpp
++++ b/torch/csrc/inductor/static_launcher/cuda.cpp
+@@ -6,6 +6,8 @@
+ #include <torch/csrc/inductor/static_launcher/cuda.h>
+ #include <cstdint>
+ 
++#include "read_core_cycle_runtime.h"
++
+ #include <torch/csrc/utils/python_numbers.h>
+ #include <filesystem>
+ #include <optional>
+@@ -45,6 +47,8 @@
+ // and launch triton compiled CUDA kernels, so CUDA should always be
+ // initialized.
+ namespace {
++constexpr std::uint16_t kRccQwen3Site = 700;
++
+ const at::cuda::NVRTC& nvrtc() {
+   return at::globalContext().getNVRTC();
+ }
+@@ -210,43 +214,87 @@ inline void launchKernel(
+     uint32_t numWarps,
+     uint32_t sharedMemBytes,
+     void** args,
+-    cudaStream_t stream) {
++    cudaStream_t stream,
++    std::uint16_t rccStageBase) {
+   // cta_args is always 1 for inductor generated triton kernels,
+   // so we don't need to figure out grid dimension here
++  const bool rccGeometry =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 6);
++  const auto rccGeometryBegin = rccGeometry
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+ #if defined(USE_ROCM)
+   int device = 0;
+   AT_CUDA_DRIVER_CHECK(hipGetDevice(&device));
+   int warp_size = 0;
+   AT_CUDA_DRIVER_CHECK(
+       hipDeviceGetAttribute(&warp_size, hipDeviceAttributeWarpSize, device));
+-
+-  AT_CUDA_DRIVER_CHECK(hipModuleLaunchKernel(
++  const uint32_t blockX = warp_size * numWarps;
++#else
++  const uint32_t blockX = 32 * numWarps;
++#endif
++  constexpr uint32_t blockY = 1;
++  constexpr uint32_t blockZ = 1;
++  if (rccGeometry) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 6, rccGeometryBegin, end);
++  }
++  const bool rccLaunch =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 7);
++  const auto rccLaunchBegin = rccLaunch
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++#if defined(USE_ROCM)
++  const auto launchStatus = hipModuleLaunchKernel(
+       func,
+       gridX,
+       gridY,
+       gridZ,
+-      warp_size * numWarps, // blockDim.x
+-      1, // blockDim.y
+-      1, // blockDim.z
++      blockX,
++      blockY,
++      blockZ,
+       sharedMemBytes,
+       stream,
+       args,
+-      nullptr));
++      nullptr);
+ 
+ #else
+-  AT_CUDA_DRIVER_CHECK(nvrtc().cuLaunchKernel(
++  const auto launchStatus = nvrtc().cuLaunchKernel(
+       func,
+       gridX,
+       gridY,
+       gridZ,
+-      32 * numWarps, // blockDim.x
+-      1, // blockDim.y
+-      1, // blockDim.z
++      blockX,
++      blockY,
++      blockZ,
+       sharedMemBytes,
+       stream,
+       args,
+-      nullptr));
++      nullptr);
+ #endif
++  if (rccLaunch) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 7, rccLaunchBegin, end);
++  }
++  const bool rccLaunchCheck =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 8);
++  const auto rccLaunchCheckBegin = rccLaunchCheck
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  AT_CUDA_DRIVER_CHECK(launchStatus);
++  if (rccLaunchCheck) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 8, rccLaunchCheckBegin, end);
++  }
+ }
+ 
+ template <typename FINAL, typename F>
+@@ -400,15 +448,31 @@ PyObject* launch_kernel_inner(
+     int sharedMemBytes,
+     const char* argTypes,
+     PyObject* varArgs,
+-    cudaStream_t cudaStream) {
++    cudaStream_t cudaStream,
++    std::uint16_t rccStageBase,
++    std::uint16_t rccOperatorStage,
++    bool rccOperatorTotal,
++    const vllm::instrumentation::ReadCoreCycleBoundary& rccOperatorBegin) {
+   // Launch the kernel
+   // Prepare the arguments for the kernel
+   // We allocate 8 bytes per argument on the stack. We then allocate 8 more
+   // bytes to point to each 8 byte slot in argStorage, and pass that array of
+   // pointers to launchKernel.
++  const bool rccParameters =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 5);
++  const auto rccParametersBegin = rccParameters
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   std::array<uint64_t, MAX_ARGS> argStorage = {};
+   std::array<void*, MAX_ARGS> kernelArgs = {};
+   parseKernelArgs(varArgs, argTypes, argStorage.data(), kernelArgs.data());
++  if (rccParameters) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 5, rccParametersBegin, end);
++  }
+   launchKernel(
+       func,
+       gridX,
+@@ -417,8 +481,28 @@ PyObject* launch_kernel_inner(
+       numWarps,
+       sharedMemBytes,
+       kernelArgs.data(),
+-      cudaStream);
+-  Py_RETURN_NONE;
++      cudaStream,
++      rccStageBase);
++  const bool rccReturn =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 9);
++  const auto rccReturnBegin = rccReturn
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  Py_INCREF(Py_None);
++  PyObject* result = Py_None;
++  if (rccReturn) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 9, rccReturnBegin, end);
++  }
++  if (rccOperatorTotal) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccOperatorStage, rccOperatorBegin, end);
++  }
++  return result;
+ }
+ 
+ PyObject* launch_kernel_slow(
+@@ -430,13 +514,29 @@ PyObject* launch_kernel_slow(
+     int sharedMemBytes,
+     const char* argTypes,
+     PyObject* varArgs,
+-    cudaStream_t cudaStream) {
++    cudaStream_t cudaStream,
++    std::uint16_t rccStageBase,
++    std::uint16_t rccOperatorStage,
++    bool rccOperatorTotal,
++    const vllm::instrumentation::ReadCoreCycleBoundary& rccOperatorBegin) {
+   /* For the slow case, allocate memory on the stack instead of the heap */
++  const bool rccParameters =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 5);
++  const auto rccParametersBegin = rccParameters
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   size_t numArgs = std::strlen(argTypes);
+   std::vector<uint64_t> argStorage(numArgs);
+   std::vector<void*> kernelArgs(numArgs);
+ 
+   parseKernelArgs(varArgs, argTypes, argStorage.data(), kernelArgs.data());
++  if (rccParameters) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 5, rccParametersBegin, end);
++  }
+ 
+   launchKernel(
+       func,
+@@ -446,8 +546,28 @@ PyObject* launch_kernel_slow(
+       numWarps,
+       sharedMemBytes,
+       kernelArgs.data(),
+-      cudaStream);
+-  Py_RETURN_NONE;
++      cudaStream,
++      rccStageBase);
++  const bool rccReturn =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 9);
++  const auto rccReturnBegin = rccReturn
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  Py_INCREF(Py_None);
++  PyObject* result = Py_None;
++  if (rccReturn) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 9, rccReturnBegin, end);
++  }
++  if (rccOperatorTotal) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccOperatorStage, rccOperatorBegin, end);
++  }
++  return result;
+ }
+ 
+ /**
+@@ -473,12 +593,45 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
+   // stream here should be the raw stream gotten from
+   // device_interface.get_raw_stream()
+   uint64_t stream = 0;
++  unsigned short rccStageBase = 0;
++  unsigned short rccOperatorStage = 0;
+   const char* argTypes = nullptr;
+   PyObject* varArgs = nullptr;
++  if (PyTuple_Check(args) && PyTuple_Size(args) == 11) {
++    PyObject* stageObject = PyTuple_GetItem(args, 9);
++    PyObject* operatorObject = PyTuple_GetItem(args, 10);
++    if (stageObject != nullptr && operatorObject != nullptr &&
++        PyLong_Check(stageObject) && PyLong_Check(operatorObject)) {
++      const unsigned long stageValue = PyLong_AsUnsignedLong(stageObject);
++      const unsigned long operatorValue =
++          PyLong_AsUnsignedLong(operatorObject);
++      if (!PyErr_Occurred() && stageValue <= UINT16_MAX &&
++          operatorValue <= UINT16_MAX) {
++        rccStageBase = static_cast<unsigned short>(stageValue);
++        rccOperatorStage = static_cast<unsigned short>(operatorValue);
++      } else {
++        PyErr_Clear();
++      }
++    }
++  }
++  const bool rccFixedArguments =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 1);
++  const auto rccFixedArgumentsBegin = rccFixedArguments
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
++  const bool rccOperatorTotal =
++      rccOperatorStage != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccOperatorStage);
++  const auto rccOperatorBegin = rccOperatorTotal
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   // Parse the fixed arguments and the format string
+   if (!PyArg_ParseTuple(
+           args,
+-          "KiiiiisOK",
++          "KiiiiisOKHH",
+           &func_ptr,
+           &gridX,
+           &gridY,
+@@ -487,21 +640,59 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
+           &sharedMemBytes,
+           &argTypes,
+           &varArgs,
+-          &stream)) {
++          &stream,
++          &rccStageBase,
++          &rccOperatorStage)) {
+     return nullptr;
+   }
+   if (gridX * gridY * gridZ <= 0) {
++    if (rccFixedArguments) {
++      const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++      vllm::instrumentation::CommitReadCoreCyclePairedSample(
++          kRccQwen3Site, rccStageBase + 1, rccFixedArgumentsBegin, end);
++    }
++    Py_INCREF(Py_None);
++    PyObject* result = Py_None;
++    if (rccOperatorTotal) {
++      const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++      vllm::instrumentation::CommitReadCoreCyclePairedSample(
++          kRccQwen3Site, rccOperatorStage, rccOperatorBegin, end);
++    }
+     // No need to do any work if we're outside of grid bounds
+-    Py_RETURN_NONE;
++    return result;
++  }
++  if (rccFixedArguments) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 1, rccFixedArgumentsBegin, end);
+   }
+   CUcontext pctx = nullptr;
++  const bool rccContextQuery =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 2);
++  const auto rccContextQueryBegin = rccContextQuery
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+ #if defined(USE_ROCM)
+   AT_CUDA_DRIVER_CHECK(hipCtxGetCurrent(&pctx));
+ #else
+   AT_CUDA_DRIVER_CHECK(nvrtc().cuCtxGetCurrent(&pctx));
+ #endif
++  if (rccContextQuery) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 2, rccContextQueryBegin, end);
++  }
+ 
+   if (!pctx) {
++    const bool rccContextInitialize =
++        rccStageBase != 0 &&
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccQwen3Site, rccStageBase + 3);
++    const auto rccContextInitializeBegin = rccContextInitialize
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
+     // Ensure device context exists
+     CUdevice device = 0;
+ #if defined(USE_ROCM)
+@@ -514,10 +705,30 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
+     AT_CUDA_DRIVER_CHECK(nvrtc().cuCtxSetCurrent(pctx));
+ 
+ #endif
++    if (rccContextInitialize) {
++      const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++      vllm::instrumentation::CommitReadCoreCyclePairedSample(
++          kRccQwen3Site,
++          rccStageBase + 3,
++          rccContextInitializeBegin,
++          end);
++    }
+   }
++  const bool rccHandles =
++      rccStageBase != 0 &&
++      vllm::instrumentation::ReadCoreCycleStageSelected(
++          kRccQwen3Site, rccStageBase + 4);
++  const auto rccHandlesBegin = rccHandles
++      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++      : vllm::instrumentation::ReadCoreCycleBoundary{};
+   CUfunction func = reinterpret_cast<CUfunction>(func_ptr); // NOLINT
+   cudaStream_t cudaStream = reinterpret_cast<cudaStream_t>(stream); // NOLINT
+   auto num_args = std::strlen(argTypes);
++  if (rccHandles) {
++    const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++        kRccQwen3Site, rccStageBase + 4, rccHandlesBegin, end);
++  }
+   // Kernels with no arguments should just pass nullptr to cuLaunchKernel
+   if (num_args == 0) {
+     launchKernel(
+@@ -528,8 +739,28 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
+         numWarps,
+         sharedMemBytes,
+         nullptr,
+-        cudaStream);
+-    Py_RETURN_NONE;
++        cudaStream,
++        rccStageBase);
++    const bool rccReturn =
++        rccStageBase != 0 &&
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccQwen3Site, rccStageBase + 9);
++    const auto rccReturnBegin = rccReturn
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++    Py_INCREF(Py_None);
++    PyObject* result = Py_None;
++    if (rccReturn) {
++      const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++      vllm::instrumentation::CommitReadCoreCyclePairedSample(
++          kRccQwen3Site, rccStageBase + 9, rccReturnBegin, end);
++    }
++    if (rccOperatorTotal) {
++      const auto end = vllm::instrumentation::ReadCoreCycleBoundaryNow();
++      vllm::instrumentation::CommitReadCoreCyclePairedSample(
++          kRccQwen3Site, rccOperatorStage, rccOperatorBegin, end);
++    }
++    return result;
+   } else if (num_args <= MAX_ARGS) {
+     return launch_kernel_inner(
+         func,
+@@ -540,7 +771,11 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
+         sharedMemBytes,
+         argTypes,
+         varArgs,
+-        cudaStream);
++        cudaStream,
++        rccStageBase,
++        rccOperatorStage,
++        rccOperatorTotal,
++        rccOperatorBegin);
+   } else {
+     return launch_kernel_slow(
+         func,
+@@ -551,7 +786,11 @@ PyObject* launch_kernel(PyObject* self, PyObject* args) {
+         sharedMemBytes,
+         argTypes,
+         varArgs,
+-        cudaStream);
++        cudaStream,
++        rccStageBase,
++        rccOperatorStage,
++        rccOperatorTotal,
++        rccOperatorBegin);
+   }
+   END_HANDLE_TH_ERRORS
+ }

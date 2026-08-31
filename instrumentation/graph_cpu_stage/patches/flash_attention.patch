@@ -1,0 +1,577 @@
+diff --git a/csrc/flash_attn/flash_api.cpp b/csrc/flash_attn/flash_api.cpp
+index 11f6249..e35730a 100644
+--- a/csrc/flash_attn/flash_api.cpp
++++ b/csrc/flash_attn/flash_api.cpp
+@@ -6,6 +6,8 @@
+ #include <torch/nn/functional.h>
+ #include <c10/cuda/CUDAGuard.h>
+ #include <c10/cuda/CUDAStream.h>
++#include "read_core_cycle_runtime.h"
++#include "read_core_cycle_qwen3.h"
+ #include <ATen/cuda/CUDAGeneratorImpl.h>  // For at::Generator and at::PhiloxCudaState
+ #include "philox_unpack.cuh"  // For at::cuda::philox::unpack
+ 
+@@ -22,6 +24,11 @@
+ 
+ namespace FLASH_NAMESPACE {
+ 
++constexpr std::uint16_t kRccGraphSite = 700;
++thread_local bool rcc_fa_dispatch_active = false;
++thread_local vllm::instrumentation::ReadCoreCycleBoundary
++    rcc_fa_dispatch_begin{};
++
+ void set_params_fprop(Flash_fwd_params &params,
+                       // sizes
+                       const size_t b,
+@@ -240,6 +247,15 @@ void set_params_dgrad(Flash_bwd_params &params,
+ }
+ 
+ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    rcc_fa_dispatch_active =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8009);
++    if (rcc_fa_dispatch_active) {
++        rcc_fa_dispatch_begin =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++    }
++#endif
+     FP16_SWITCH(!params.is_bf16, [&] {
+         HEADDIM_SWITCH(params.d, [&] {
+             BOOL_SWITCH(params.is_causal, Is_causal, [&] {
+@@ -536,6 +552,15 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+                int num_splits,
+                std::optional<at::Generator> gen_) {
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    const bool rcc_record_s01 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8001);
++    const auto rcc_s01_begin = rcc_record_s01
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
++
+     // Otherwise the kernel will be launched from cuda:0 device
+     at::cuda::CUDAGuard device_guard{q.device()};
+ 
+@@ -570,6 +595,20 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+     CHECK_CONTIGUOUS(cu_seqlens_q);
+     CHECK_CONTIGUOUS(cu_seqlens_k);
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s01) {
++        const auto rcc_s01_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8001, rcc_s01_begin, rcc_s01_end);
++    }
++    const bool rcc_record_s02 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8002);
++    const auto rcc_s02_begin = rcc_record_s02
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     const auto sizes = q.sizes();
+ 
+     const int batch_size = cu_seqlens_q.numel() - 1;
+@@ -591,6 +630,14 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+ 
+     // Faster to transpose q from (b, 1, (nheads_kv ngroups), d) to (b, ngroups, nheads_kv, d) in this case
+     // H/t Daniel Haziza
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    const bool rcc_record_s03 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8003);
++    const auto rcc_s03_begin = rcc_record_s03
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     const int seqlenq_ngroups_swapped = max_seqlen_q == 1 && num_heads > num_heads_k && window_size_left < 0 && window_size_right < 0 && p_dropout == 0.f && head_size % 8 == 0 && !alibi_slopes_.has_value();
+     const int ngroups = num_heads / num_heads_k;
+     if (seqlenq_ngroups_swapped) {
+@@ -599,6 +646,14 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+         num_heads = num_heads_k;
+         cu_seqlens_q_d = nullptr;
+     }
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s03 && seqlenq_ngroups_swapped) {
++        const auto rcc_s03_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8003, rcc_s03_begin, rcc_s03_end);
++    }
++#endif
+ 
+     const int total_q = q.sizes()[0];
+ 
+@@ -631,6 +686,20 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+         CHECK_SHAPE(seqused_k_, batch_size);
+     }
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s02) {
++        const auto rcc_s02_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8002, rcc_s02_begin, rcc_s02_end);
++    }
++    const bool rcc_record_s04 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8004);
++    const auto rcc_s04_begin = rcc_record_s04
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     at::Tensor out;
+     if (out_.has_value()) {
+         out = out_.value();
+@@ -665,12 +734,46 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+         p = torch::empty({ 0 }, opts);
+     }
+ 
+-    if (zero_tensors) {
+-        out.zero_();
+-        softmax_lse.fill_(-std::numeric_limits<float>::infinity());
+-        if (return_softmax) {p.zero_();}
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_zero_cond(
++        vllm::instrumentation::ReadCoreCycleQwen3FlashStageId(11801));
++    const bool rcc_qwen3_zero_tensors = zero_tensors;
++    const bool rcc_qwen3_return_softmax = return_softmax;
++    rcc_qwen3_zero_cond.Finish();
++    if (rcc_qwen3_zero_tensors) {
++        {
++            vllm::instrumentation::ReadCoreCycleQwen3SubleafScope rcc_qwen3_fill(1);
++            vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_total(
++                vllm::instrumentation::ReadCoreCycleQwen3FillStageId(1));
++            out.zero_();
++        }
++        {
++            vllm::instrumentation::ReadCoreCycleQwen3SubleafScope rcc_qwen3_fill(2);
++            vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_total(
++                vllm::instrumentation::ReadCoreCycleQwen3FillStageId(1));
++            softmax_lse.fill_(-std::numeric_limits<float>::infinity());
++        }
++        if (rcc_qwen3_return_softmax) {
++            vllm::instrumentation::ReadCoreCycleQwen3SubleafScope rcc_qwen3_fill(3);
++            vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_total(
++                vllm::instrumentation::ReadCoreCycleQwen3FillStageId(1));
++            p.zero_();
++        }
+     }
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s04) {
++        const auto rcc_s04_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8004, rcc_s04_begin, rcc_s04_end);
++    }
++    const bool rcc_record_s05 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8005);
++    const auto rcc_s05_begin = rcc_record_s05
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     Flash_fwd_params params;
+     set_params_fprop(params,
+                      batch_size,
+@@ -700,6 +803,20 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+         params.v_batch_stride = v.stride(0);
+     }
+     params.page_block_size = page_block_size;
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s05) {
++        const auto rcc_s05_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8005, rcc_s05_begin, rcc_s05_end);
++    }
++    const bool rcc_record_s06 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8006);
++    const auto rcc_s06_begin = rcc_record_s06
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     // Keep references to these tensors to extend their lifetime
+     at::Tensor softmax_lse_accum, out_accum;
+     if (seqlenq_ngroups_swapped) {
+@@ -713,6 +830,20 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+         params.num_splits = num_splits;
+     }
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s06 && seqlenq_ngroups_swapped) {
++        const auto rcc_s06_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8006, rcc_s06_begin, rcc_s06_end);
++    }
++    const bool rcc_record_s07 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8007);
++    const auto rcc_s07_begin = rcc_record_s07
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     if (leftpad_k_.has_value()) {
+         auto leftpad_k = leftpad_k_.value();
+         TORCH_CHECK(!paged_KV, "We don't support Paged KV and leftpad_k running at the same time yet");
+@@ -742,16 +873,62 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+     // }
+ 
+     set_params_alibi(params, alibi_slopes_, batch_size, num_heads);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s07) {
++        const auto rcc_s07_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8007, rcc_s07_begin, rcc_s07_end);
++    }
++#endif
+ 
+-    if (max_seqlen_k > 0) {
++    vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_emptyk_cond(
++        vllm::instrumentation::ReadCoreCycleQwen3FlashStageId(11814));
++    const bool rcc_qwen3_has_k = max_seqlen_k > 0;
++    rcc_qwen3_emptyk_cond.Finish();
++    if (rcc_qwen3_has_k) {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++        const bool rcc_record_s08 =
++            vllm::instrumentation::ReadCoreCycleStageSelected(
++                kRccGraphSite, 8008);
++        const auto rcc_s08_begin = rcc_record_s08
++            ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++            : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+         auto stream = at::cuda::getCurrentCUDAStream().stream();
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++        if (rcc_record_s08) {
++            const auto rcc_s08_end =
++                vllm::instrumentation::ReadCoreCycleBoundaryNow();
++            vllm::instrumentation::CommitReadCoreCyclePairedSample(
++                kRccGraphSite, 8008, rcc_s08_begin, rcc_s08_end);
++        }
++#endif
+         run_mha_fwd(params, stream, paged_KV);
+     } else {
+         // If seqlen_k == 0, then we have an empty tensor. We need to set the output to 0.
+-        out.zero_();
+-        softmax_lse.fill_(std::numeric_limits<float>::infinity());
++        {
++            vllm::instrumentation::ReadCoreCycleQwen3SubleafScope rcc_qwen3_fill(4);
++            vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_total(
++                vllm::instrumentation::ReadCoreCycleQwen3FillStageId(1));
++            out.zero_();
++        }
++        {
++            vllm::instrumentation::ReadCoreCycleQwen3SubleafScope rcc_qwen3_fill(5);
++            vllm::instrumentation::ReadCoreCycleQwen3StageGuard rcc_qwen3_fill_total(
++                vllm::instrumentation::ReadCoreCycleQwen3FillStageId(1));
++            softmax_lse.fill_(std::numeric_limits<float>::infinity());
++        }
+     }
+ 
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    const bool rcc_record_s16 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8016);
++    const auto rcc_s16_begin = rcc_record_s16
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     if (seqlenq_ngroups_swapped) {
+         int64_t size_before[] = {batch_size, max_seqlen_q, num_heads_k, head_size};
+         int64_t size_after[] = {batch_size, num_heads_k * max_seqlen_q, head_size};
+@@ -780,10 +957,34 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
+             // It must be transposed to the canonical [seqlen_q, h, b] layout.
+             softmax_lse = softmax_lse.reshape(lse_size_before).transpose(1, 2).reshape(lse_size_after);
+         }
+-        
++
+     }
+ 
+-    return {out, softmax_lse};
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s16 && seqlenq_ngroups_swapped) {
++        const auto rcc_s16_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8016, rcc_s16_begin, rcc_s16_end);
++    }
++    const bool rcc_record_s17 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8017);
++    const auto rcc_s17_begin = rcc_record_s17
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
++    std::vector<at::Tensor> rcc_result{out, softmax_lse};
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_record_s17) {
++        const auto rcc_s17_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8017, rcc_s17_begin, rcc_s17_end);
++    }
++#endif
++
++    return rcc_result;
+ }
+ 
+ void run_mha_bwd(Flash_bwd_params &params, cudaStream_t stream) {
+diff --git a/csrc/flash_attn/src/flash_fwd_launch_template.h b/csrc/flash_attn/src/flash_fwd_launch_template.h
+index e63d1f4..bece987 100644
+--- a/csrc/flash_attn/src/flash_fwd_launch_template.h
++++ b/csrc/flash_attn/src/flash_fwd_launch_template.h
+@@ -10,9 +10,59 @@
+ #include "hardware_info.h"
+ #include "flash.h"
+ #include "flash_fwd_kernel.h"
++#include "read_core_cycle_runtime.h"
+ 
+ namespace FLASH_NAMESPACE {
+ 
++constexpr std::uint16_t kRccGraphSite = 700;
++extern thread_local bool rcc_fa_dispatch_active;
++extern thread_local vllm::instrumentation::ReadCoreCycleBoundary
++    rcc_fa_dispatch_begin;
++
++inline void rcc_finish_fa_dispatch() {
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    if (rcc_fa_dispatch_active) {
++        const auto rcc_dispatch_end =
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(
++            kRccGraphSite, 8009, rcc_fa_dispatch_begin, rcc_dispatch_end);
++        rcc_fa_dispatch_active = false;
++    }
++#endif
++}
++
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++  #define RCC_FA_COMBINE_LAUNCH(LOG_MAX_SPLITS)                              \
++    do {                                                                      \
++      if (rcc_record_s13) {                                                   \
++        const auto rcc_s13_end =                                              \
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();                \
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(               \
++            kRccGraphSite, 8013, rcc_s13_begin, rcc_s13_end);                 \
++      }                                                                       \
++      const bool rcc_record_s14 =                                             \
++          vllm::instrumentation::ReadCoreCycleStageSelected(                  \
++              kRccGraphSite, 8014);                                           \
++      const auto rcc_s14_begin = rcc_record_s14                               \
++          ? vllm::instrumentation::ReadCoreCycleBoundaryNow()                 \
++          : vllm::instrumentation::ReadCoreCycleBoundary{};                   \
++      flash_fwd_splitkv_combine_kernel<                                      \
++          Kernel_traits, kBlockM, LOG_MAX_SPLITS, IsEvenKConst>              \
++          <<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);    \
++      if (rcc_record_s14) {                                                   \
++        const auto rcc_s14_end =                                              \
++            vllm::instrumentation::ReadCoreCycleBoundaryNow();                \
++        vllm::instrumentation::CommitReadCoreCyclePairedSample(               \
++            kRccGraphSite, 8014, rcc_s14_begin, rcc_s14_end);                 \
++      }                                                                       \
++    } while (false)
++#else
++  #define RCC_FA_COMBINE_LAUNCH(LOG_MAX_SPLITS)                              \
++    flash_fwd_splitkv_combine_kernel<                                        \
++        Kernel_traits, kBlockM, LOG_MAX_SPLITS, IsEvenKConst>                \
++        <<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params)
++#endif
++
+ // Determine if the architecture supports FLASH and define a macro to handle parameter modifiers
+ #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+ #define ARCH_SUPPORTS_FLASH
+@@ -53,6 +103,15 @@ DEFINE_FLASH_FORWARD_KERNEL(flash_fwd_splitkv_combine_kernel, int kBlockM, int L
+ 
+ template<typename Kernel_traits, bool Is_dropout, bool Is_causal>
+ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
++    rcc_finish_fa_dispatch();
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    const bool rcc_record_s10 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8010);
++    const auto rcc_s10_begin = rcc_record_s10
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     constexpr size_t smem_size = Kernel_traits::kSmemSize;
+     // printf("smem_size = %d\n", smem_size);
+ 
+@@ -88,8 +147,44 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
+                             // cudaError status_ = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+                             //     &ctas_per_sm, kernel, Kernel_traits::kNThreads, smem_size);
+                             // printf("smem_size = %d, CTAs per SM = %d\n", int(smem_size), ctas_per_sm);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++                            if (rcc_record_s10) {
++                                const auto rcc_s10_end =
++                                    vllm::instrumentation::ReadCoreCycleBoundaryNow();
++                                vllm::instrumentation::CommitReadCoreCyclePairedSample(
++                                    kRccGraphSite, 8010, rcc_s10_begin, rcc_s10_end);
++                            }
++                            const bool rcc_record_s11 =
++                                vllm::instrumentation::ReadCoreCycleStageSelected(
++                                    kRccGraphSite, 8011);
++                            const auto rcc_s11_begin = rcc_record_s11
++                                ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++                                : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+                             kernel<<<grid, Kernel_traits::kNThreads, smem_size, stream>>>(params);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++                            if (rcc_record_s11) {
++                                const auto rcc_s11_end =
++                                    vllm::instrumentation::ReadCoreCycleBoundaryNow();
++                                vllm::instrumentation::CommitReadCoreCyclePairedSample(
++                                    kRccGraphSite, 8011, rcc_s11_begin, rcc_s11_end);
++                            }
++                            const bool rcc_record_s12 =
++                                vllm::instrumentation::ReadCoreCycleStageSelected(
++                                    kRccGraphSite, 8012);
++                            const auto rcc_s12_begin = rcc_record_s12
++                                ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++                                : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+                             C10_CUDA_KERNEL_LAUNCH_CHECK();
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++                            if (rcc_record_s12) {
++                                const auto rcc_s12_end =
++                                    vllm::instrumentation::ReadCoreCycleBoundaryNow();
++                                vllm::instrumentation::CommitReadCoreCyclePairedSample(
++                                    kRccGraphSite, 8012, rcc_s12_begin, rcc_s12_end);
++                            }
++#endif
+                         });
+                     });
+                 });
+@@ -100,6 +195,15 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
+ 
+ template<typename Kernel_traits, bool Is_causal>
+ void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
++    rcc_finish_fa_dispatch();
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    const bool rcc_record_s10 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8010);
++    const auto rcc_s10_begin = rcc_record_s10
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     static_assert(!Kernel_traits::Is_Q_in_regs, "SplitKV implementation does not support Is_Q_in_regs");
+     static_assert(!Kernel_traits::Share_Q_K_smem, "SplitKV implementation does not support Share_Q_K_smem");
+     constexpr size_t smem_size = Kernel_traits::kSmemSize;
+@@ -124,8 +228,44 @@ void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
+                                     C10_CUDA_CHECK(cudaFuncSetAttribute(
+                                         kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
+                                 }
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++                                if (rcc_record_s10) {
++                                    const auto rcc_s10_end =
++                                        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++                                    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++                                        kRccGraphSite, 8010, rcc_s10_begin, rcc_s10_end);
++                                }
++                                const bool rcc_record_s11 =
++                                    vllm::instrumentation::ReadCoreCycleStageSelected(
++                                        kRccGraphSite, 8011);
++                                const auto rcc_s11_begin = rcc_record_s11
++                                    ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++                                    : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+                                 kernel<<<grid, Kernel_traits::kNThreads, smem_size, stream>>>(params);
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++                                if (rcc_record_s11) {
++                                    const auto rcc_s11_end =
++                                        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++                                    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++                                        kRccGraphSite, 8011, rcc_s11_begin, rcc_s11_end);
++                                }
++                                const bool rcc_record_s12 =
++                                    vllm::instrumentation::ReadCoreCycleStageSelected(
++                                        kRccGraphSite, 8012);
++                                const auto rcc_s12_begin = rcc_record_s12
++                                    ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++                                    : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+                                 C10_CUDA_KERNEL_LAUNCH_CHECK();
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++                                if (rcc_record_s12) {
++                                    const auto rcc_s12_end =
++                                        vllm::instrumentation::ReadCoreCycleBoundaryNow();
++                                    vllm::instrumentation::CommitReadCoreCyclePairedSample(
++                                        kRccGraphSite, 8012, rcc_s12_begin, rcc_s12_end);
++                                }
++#endif
+                             });
+                         });
+                     });
+@@ -133,6 +273,14 @@ void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
+             });
+         });
+     });
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++    const bool rcc_record_s13 =
++        vllm::instrumentation::ReadCoreCycleStageSelected(
++            kRccGraphSite, 8013);
++    const auto rcc_s13_begin = rcc_record_s13
++        ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++        : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+     if (params.num_splits > 1) {
+         // We want kBlockM to be as small as possible for more parallelism.
+         // With 128 threads we can load 512 elements at a time, so if headdim is divisible by 128, kBlockM = 4.
+@@ -141,25 +289,43 @@ void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {
+         dim3 grid_combine((params.b * params.h * params.seqlen_q + kBlockM - 1) / kBlockM);
+         EVENK_SWITCH(is_even_K, IsEvenKConst, [&] {
+             if (params.num_splits <= 2) {
+-                flash_fwd_splitkv_combine_kernel<Kernel_traits, kBlockM, 1, IsEvenKConst><<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);
++                RCC_FA_COMBINE_LAUNCH(1);
+             } else if (params.num_splits <= 4) {
+-                flash_fwd_splitkv_combine_kernel<Kernel_traits, kBlockM, 2, IsEvenKConst><<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);
++                RCC_FA_COMBINE_LAUNCH(2);
+             } else if (params.num_splits <= 8) {
+-                flash_fwd_splitkv_combine_kernel<Kernel_traits, kBlockM, 3, IsEvenKConst><<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);
++                RCC_FA_COMBINE_LAUNCH(3);
+             } else if (params.num_splits <= 16) {
+-                flash_fwd_splitkv_combine_kernel<Kernel_traits, kBlockM, 4, IsEvenKConst><<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);
++                RCC_FA_COMBINE_LAUNCH(4);
+             } else if (params.num_splits <= 32) {
+-                flash_fwd_splitkv_combine_kernel<Kernel_traits, kBlockM, 5, IsEvenKConst><<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);
++                RCC_FA_COMBINE_LAUNCH(5);
+             } else if (params.num_splits <= 64) {
+-                flash_fwd_splitkv_combine_kernel<Kernel_traits, kBlockM, 6, IsEvenKConst><<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);
++                RCC_FA_COMBINE_LAUNCH(6);
+             } else if (params.num_splits <= 128) {
+-                flash_fwd_splitkv_combine_kernel<Kernel_traits, kBlockM, 7, IsEvenKConst><<<grid_combine, Kernel_traits::kNThreads, 0, stream>>>(params);
++                RCC_FA_COMBINE_LAUNCH(7);
+             }
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++            const bool rcc_record_s15 =
++                vllm::instrumentation::ReadCoreCycleStageSelected(
++                    kRccGraphSite, 8015);
++            const auto rcc_s15_begin = rcc_record_s15
++                ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
++                : vllm::instrumentation::ReadCoreCycleBoundary{};
++#endif
+             C10_CUDA_KERNEL_LAUNCH_CHECK();
++#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
++            if (rcc_record_s15) {
++                const auto rcc_s15_end =
++                    vllm::instrumentation::ReadCoreCycleBoundaryNow();
++                vllm::instrumentation::CommitReadCoreCyclePairedSample(
++                    kRccGraphSite, 8015, rcc_s15_begin, rcc_s15_end);
++            }
++#endif
+         });
+     }
+ }
+ 
++#undef RCC_FA_COMBINE_LAUNCH
++
+ // The num_splits==1 blocksize-aligned splitkv template. If a user specifies
+ // num_splits=1, we assume they want bitwise identical numerics across the split
+ // KV and standard kernels so we align kBlockN to match.

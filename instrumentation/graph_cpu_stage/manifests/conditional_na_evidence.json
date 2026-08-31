@@ -1,0 +1,85 @@
+{
+  "evidence_version": 1,
+  "scope": "Qwen3 normal Graph path; maybe_contiguous(q, k, v) immediately before FA2 varlen_fwd",
+  "runtime_tree_evidence": "The audited 71-node nested operator tree contains unified_attention_with_output and _vllm_fa2_C::varlen_fwd for all 36 layers in both Graph Capture and Graph Prefill, but no aten::contiguous leaf between them.",
+  "items": [
+    {
+      "stage_id": 11901,
+      "phase": "graph-capture",
+      "source_evidence": [
+        "vllm/vllm_flash_attn/flash_attn_interface.py:117-118,292 (q branch requires q.stride(-1) != 1)",
+        "flash_attention/csrc/flash_attn/flash_api.cpp:mha_varlen_fwd checks q.stride(-1) == 1"
+      ],
+      "runtime_runs": [
+        "stage0829_0263_graph-capture-full_stage1017",
+        "stage0829_0285_graph-capture-full_stage1039"
+      ],
+      "reason": "Capture 完整嵌套算子树中，unified_attention_with_output 与 FA2 varlen_fwd 均按 36 层命中且 lost_count=0，两者之间未出现 aten::contiguous；源码显示 q 仅在 stride(-1) != 1 时进入 contiguous，故本路径 q contiguous 直接叶子为 N/A。"
+    },
+    {
+      "stage_id": 11901,
+      "phase": "graph-prefill",
+      "source_evidence": [
+        "vllm/vllm_flash_attn/flash_attn_interface.py:117-118,292 (q branch requires q.stride(-1) != 1)",
+        "flash_attention/csrc/flash_attn/flash_api.cpp:mha_varlen_fwd checks q.stride(-1) == 1"
+      ],
+      "runtime_runs": [
+        "stage0829_0033_graph-prefill_stage1017",
+        "stage0829_0055_graph-prefill_stage1039"
+      ],
+      "reason": "Prefill 完整嵌套算子树中，unified_attention_with_output 与 FA2 varlen_fwd 均按 36 层命中且 lost_count=0，两者之间未出现 aten::contiguous；源码显示 q 仅在 stride(-1) != 1 时进入 contiguous，故本路径 q contiguous 直接叶子为 N/A。"
+    },
+    {
+      "stage_id": 11902,
+      "phase": "graph-capture",
+      "source_evidence": [
+        "vllm/vllm_flash_attn/flash_attn_interface.py:117-118,292 (k branch requires k.stride(-1) != 1)",
+        "flash_attention/csrc/flash_attn/flash_api.cpp:mha_varlen_fwd checks k.stride(-1) == 1"
+      ],
+      "runtime_runs": [
+        "stage0829_0263_graph-capture-full_stage1017",
+        "stage0829_0285_graph-capture-full_stage1039"
+      ],
+      "reason": "Capture 完整嵌套算子树中，unified_attention_with_output 与 FA2 varlen_fwd 均按 36 层命中且 lost_count=0，两者之间未出现 aten::contiguous；源码显示 k 仅在 stride(-1) != 1 时进入 contiguous，故本路径 k contiguous 直接叶子为 N/A。"
+    },
+    {
+      "stage_id": 11902,
+      "phase": "graph-prefill",
+      "source_evidence": [
+        "vllm/vllm_flash_attn/flash_attn_interface.py:117-118,292 (k branch requires k.stride(-1) != 1)",
+        "flash_attention/csrc/flash_attn/flash_api.cpp:mha_varlen_fwd checks k.stride(-1) == 1"
+      ],
+      "runtime_runs": [
+        "stage0829_0033_graph-prefill_stage1017",
+        "stage0829_0055_graph-prefill_stage1039"
+      ],
+      "reason": "Prefill 完整嵌套算子树中，unified_attention_with_output 与 FA2 varlen_fwd 均按 36 层命中且 lost_count=0，两者之间未出现 aten::contiguous；源码显示 k 仅在 stride(-1) != 1 时进入 contiguous，故本路径 k contiguous 直接叶子为 N/A。"
+    },
+    {
+      "stage_id": 11903,
+      "phase": "graph-capture",
+      "source_evidence": [
+        "vllm/vllm_flash_attn/flash_attn_interface.py:117-118,292 (v branch requires v.stride(-1) != 1)",
+        "flash_attention/csrc/flash_attn/flash_api.cpp:mha_varlen_fwd checks v.stride(-1) == 1"
+      ],
+      "runtime_runs": [
+        "stage0829_0263_graph-capture-full_stage1017",
+        "stage0829_0285_graph-capture-full_stage1039"
+      ],
+      "reason": "Capture 完整嵌套算子树中，unified_attention_with_output 与 FA2 varlen_fwd 均按 36 层命中且 lost_count=0，两者之间未出现 aten::contiguous；源码显示 v 仅在 stride(-1) != 1 时进入 contiguous，故本路径 v contiguous 直接叶子为 N/A。"
+    },
+    {
+      "stage_id": 11903,
+      "phase": "graph-prefill",
+      "source_evidence": [
+        "vllm/vllm_flash_attn/flash_attn_interface.py:117-118,292 (v branch requires v.stride(-1) != 1)",
+        "flash_attention/csrc/flash_attn/flash_api.cpp:mha_varlen_fwd checks v.stride(-1) == 1"
+      ],
+      "runtime_runs": [
+        "stage0829_0033_graph-prefill_stage1017",
+        "stage0829_0055_graph-prefill_stage1039"
+      ],
+      "reason": "Prefill 完整嵌套算子树中，unified_attention_with_output 与 FA2 varlen_fwd 均按 36 层命中且 lost_count=0，两者之间未出现 aten::contiguous；源码显示 v 仅在 stride(-1) != 1 时进入 contiguous，故本路径 v contiguous 直接叶子为 N/A。"
+    }
+  ]
+}
