@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 import dataclasses
+import os
 import weakref
 from collections import Counter
 from collections.abc import Callable
@@ -27,6 +28,8 @@ from vllm.platforms import current_platform
 from vllm.utils.torch_utils import current_stream, weak_ref_tensors
 
 logger = init_logger(__name__)
+
+_RCC_STAGE_ID = int(os.environ.get("VLLM_RCC_STAGE_ID", "0"))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -231,6 +234,18 @@ class CUDAGraphWrapper:
         self.concrete_cudagraph_entries.clear()
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any | None:
+        if _RCC_STAGE_ID == 5000:
+            torch._C._rcc_stage_begin(5000)
+        if _RCC_STAGE_ID == 5001:
+            torch._C._rcc_stage_begin(5001)
+        if _RCC_STAGE_ID == 5100:
+            torch._C._rcc_stage_begin(5100)
+        if _RCC_STAGE_ID == 5101:
+            torch._C._rcc_stage_begin(5101)
+        if _RCC_STAGE_ID == 5200:
+            torch._C._rcc_stage_begin(5200)
+        if _RCC_STAGE_ID == 5201:
+            torch._C._rcc_stage_begin(5201)
         if not is_forward_context_available():
             # No forward context means we are outside the normal
             # inference path (e.g. a vision encoder forward pass).
@@ -251,7 +266,21 @@ class CUDAGraphWrapper:
             # matches. This enables properly dispatching to the correct
             # CUDAGraphWrapper when nesting multiple instances with different
             # runtime modes.
-            return self.runnable(*args, **kwargs)
+            if _RCC_STAGE_ID == 5101:
+                torch._C._rcc_stage_end(5101)
+            if _RCC_STAGE_ID == 5102:
+                torch._C._rcc_stage_begin(5102)
+            output = self.runnable(*args, **kwargs)
+            if _RCC_STAGE_ID == 5102:
+                torch._C._rcc_stage_end(5102)
+            if _RCC_STAGE_ID == 5103:
+                torch._C._rcc_stage_begin(5103)
+            return_value = output
+            if _RCC_STAGE_ID == 5103:
+                torch._C._rcc_stage_end(5103)
+            if _RCC_STAGE_ID == 5100:
+                torch._C._rcc_stage_end(5100)
+            return return_value
 
         assert batch_descriptor is not None
         if batch_descriptor not in self.concrete_cudagraph_entries:
@@ -261,6 +290,8 @@ class CUDAGraphWrapper:
             )
 
         entry = self.concrete_cudagraph_entries[batch_descriptor]
+        if _RCC_STAGE_ID == 5201 and entry.cudagraph is not None:
+            torch._C._rcc_stage_end(5201)
 
         if entry.cudagraph is None:
             if self.cudagraph_options.debug_log_enable:
@@ -275,13 +306,21 @@ class CUDAGraphWrapper:
                 )
             # validate that cudagraph capturing is legal at this point.
             validate_cudagraph_capturing_enabled()
+            if _RCC_STAGE_ID == 5001:
+                torch._C._rcc_stage_end(5001)
 
+            if _RCC_STAGE_ID == 5002:
+                torch._C._rcc_stage_begin(5002)
             input_addresses = [
                 x.data_ptr() for x in args if isinstance(x, torch.Tensor)
             ]
             entry.input_addresses = input_addresses
             cudagraph = torch.cuda.CUDAGraph()
+            if _RCC_STAGE_ID == 5002:
+                torch._C._rcc_stage_end(5002)
 
+            if _RCC_STAGE_ID == 5003:
+                torch._C._rcc_stage_begin(5003)
             with ExitStack() as stack:
                 if self.cudagraph_options.gc_disable:
                     # during every model forward for piecewise cudagraph
@@ -304,10 +343,16 @@ class CUDAGraphWrapper:
                     set_graph_pool_id(self.graph_pool)
                 else:
                     set_graph_pool_id(current_platform.graph_pool_handle())
+                if _RCC_STAGE_ID == 5003:
+                    torch._C._rcc_stage_end(5003)
 
                 # Sync offloader's copy stream before capture.
                 # Ensure any pre-capture prefetches from offloader are complete.
+                if _RCC_STAGE_ID == 5004:
+                    torch._C._rcc_stage_begin(5004)
                 get_offloader().sync_prev_onload()
+                if _RCC_STAGE_ID == 5004:
+                    torch._C._rcc_stage_end(5004)
 
                 # mind-exploding: carefully manage the reference and memory.
                 with torch.cuda.graph(
@@ -316,7 +361,13 @@ class CUDAGraphWrapper:
                     stream=current_stream(),
                 ):
                     # `output` is managed by pytorch's cudagraph pool
+                    if _RCC_STAGE_ID == 5010:
+                        torch._C._rcc_stage_begin(5010)
                     output = self.runnable(*args, **kwargs)
+                    if _RCC_STAGE_ID == 5010:
+                        torch._C._rcc_stage_end(5010)
+                    if _RCC_STAGE_ID == 5011:
+                        torch._C._rcc_stage_begin(5011)
                     # Join offloader's copy stream after forward to avoid
                     # unjoined stream error. The last layer's start_prefetch
                     # forks copy_stream, but wait_prefetch only happens in
@@ -330,9 +381,15 @@ class CUDAGraphWrapper:
                         # the output of the last graph will not be used by
                         # any other cuda graph.
                         output = weak_ref_tensors(output)
+                    if _RCC_STAGE_ID == 5011:
+                        torch._C._rcc_stage_end(5011)
+                if _RCC_STAGE_ID == 5017:
+                    torch._C._rcc_stage_end(5017)
 
             # here we always use weak ref for the output
             # to save memory
+            if _RCC_STAGE_ID == 5018:
+                torch._C._rcc_stage_begin(5018)
             entry.output = weak_ref_tensors(output)
             entry.cudagraph = cudagraph
 
@@ -341,10 +398,16 @@ class CUDAGraphWrapper:
             # important: we need to return the output, rather than
             # the weak ref of the output, so that pytorch can correctly
             # manage the memory during cuda graph capture
+            if _RCC_STAGE_ID == 5018:
+                torch._C._rcc_stage_end(5018)
+            if _RCC_STAGE_ID == 5000:
+                torch._C._rcc_stage_end(5000)
             return output
 
         if self.is_debugging_mode:
             # check if the input addresses are the same
+            if _RCC_STAGE_ID == 5202:
+                torch._C._rcc_stage_begin(5202)
             new_input_addresses = [
                 x.data_ptr() for x in args if isinstance(x, torch.Tensor)
             ]
@@ -353,9 +416,26 @@ class CUDAGraphWrapper:
                 f"during replay. Expected {entry.input_addresses}, "
                 f"got {new_input_addresses}"
             )
+            if _RCC_STAGE_ID == 5202:
+                torch._C._rcc_stage_end(5202)
 
         # Sync offloader before replay - ensures any external dependencies
         # from pre-capture prefetches are satisfied.
+        if _RCC_STAGE_ID == 5203:
+            torch._C._rcc_stage_begin(5203)
         get_offloader().sync_prev_onload()
+        if _RCC_STAGE_ID == 5203:
+            torch._C._rcc_stage_end(5203)
+        if _RCC_STAGE_ID == 5204:
+            torch._C._rcc_stage_begin(5204)
         entry.cudagraph.replay()
-        return entry.output
+        if _RCC_STAGE_ID == 5204:
+            torch._C._rcc_stage_end(5204)
+        if _RCC_STAGE_ID == 5214:
+            torch._C._rcc_stage_begin(5214)
+        replay_output = entry.output
+        if _RCC_STAGE_ID == 5214:
+            torch._C._rcc_stage_end(5214)
+        if _RCC_STAGE_ID == 5200:
+            torch._C._rcc_stage_end(5200)
+        return replay_output

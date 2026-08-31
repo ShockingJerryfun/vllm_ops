@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+import os
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -37,6 +38,8 @@ from vllm.v1.worker.gpu.model_states.interface import ModelState
 from vllm.v1.worker.utils import AttentionGroup
 
 logger = init_logger(__name__)
+
+_RCC_STAGE_ID = int(os.environ.get("VLLM_RCC_STAGE_ID", "0"))
 
 
 class AttentionState(NamedTuple):
@@ -342,19 +345,48 @@ class CudaGraphManager:
                         assert desc not in self.graphs, (
                             f"Graph already captured for {desc}"
                         )
+                        if _RCC_STAGE_ID == 5002:
+                            torch._C._rcc_stage_begin(5002)
                         graph = torch.cuda.CUDAGraph()
+                        if _RCC_STAGE_ID == 5002:
+                            torch._C._rcc_stage_end(5002)
                         # Sync offloader's copy stream before capture.
                         # Ensure any pre-capture prefetches from offloader are complete.
+                        if _RCC_STAGE_ID == 5004:
+                            torch._C._rcc_stage_begin(5004)
                         get_offloader().sync_prev_onload()
-                        with torch.cuda.graph(graph, self.pool):
+                        if _RCC_STAGE_ID == 5004:
+                            torch._C._rcc_stage_end(5004)
+                        if _RCC_STAGE_ID == 5003:
+                            torch._C._rcc_stage_begin(5003)
+                        graph_context = torch.cuda.graph(graph, self.pool)
+                        if _RCC_STAGE_ID == 5003:
+                            torch._C._rcc_stage_end(5003)
+                        with graph_context:
+                            if _RCC_STAGE_ID == 5010:
+                                torch._C._rcc_stage_begin(5010)
                             forward_fn(CUDAGraphMode.NONE)
+                            if _RCC_STAGE_ID == 5010:
+                                torch._C._rcc_stage_end(5010)
                             # Join offloader's copy stream after forward to avoid
                             # unjoined stream error. The last layer's start_prefetch
                             # forks copy_stream, but wait_prefetch only happens in
                             # the next forward pass.
+                            if _RCC_STAGE_ID == 5011:
+                                torch._C._rcc_stage_begin(5011)
                             get_offloader().join_after_forward()
+                            if _RCC_STAGE_ID == 5011:
+                                torch._C._rcc_stage_end(5011)
+                        if _RCC_STAGE_ID == 5017:
+                            torch._C._rcc_stage_end(5017)
+                        if _RCC_STAGE_ID == 5018:
+                            torch._C._rcc_stage_begin(5018)
                         self.graphs[desc] = graph
                         compilation_counter.num_cudagraph_captured += 1
+                        if _RCC_STAGE_ID == 5018:
+                            torch._C._rcc_stage_end(5018)
+                        if _RCC_STAGE_ID == 5000:
+                            torch._C._rcc_stage_end(5000)
         self._graphs_captured = True
 
     def dispatch(
@@ -387,18 +419,30 @@ class CudaGraphManager:
 
     def run_fullgraph(self, desc: BatchExecutionDescriptor):
         """Replay a captured FULL cudagraph."""
+        if _RCC_STAGE_ID == 5201:
+            torch._C._rcc_stage_begin(5201)
         assert desc.cg_mode == CUDAGraphMode.FULL, (
             f"Expected FULL mode, got {desc.cg_mode}"
         )
         assert desc in self.graphs, f"No cudagraph for {desc}"
+        if _RCC_STAGE_ID == 5201:
+            torch._C._rcc_stage_end(5201)
         # Sync offloader before replay - needed when transitioning from
         # eager/piecewise to full cudagraph (e.g., prefill → decode).
         # The previous eager iteration's start_prefetch may have queued
         # H2D copies on copy_stream that the graph's captured events
         # cannot see. Without this, replay could overwrite static buffers
         # while those copies are still in flight.
+        if _RCC_STAGE_ID == 5203:
+            torch._C._rcc_stage_begin(5203)
         get_offloader().sync_prev_onload()
+        if _RCC_STAGE_ID == 5203:
+            torch._C._rcc_stage_end(5203)
+        if _RCC_STAGE_ID == 5204:
+            torch._C._rcc_stage_begin(5204)
         self.graphs[desc].replay()
+        if _RCC_STAGE_ID == 5204:
+            torch._C._rcc_stage_end(5204)
 
     def init_breakable_cg_runner(self, model: nn.Module) -> None:
         if self.breakable_cg_runner is None:
@@ -460,6 +504,13 @@ class ModelCudaGraphManager(CudaGraphManager):
             desc: BatchExecutionDescriptor,
             warmup: bool,
         ) -> Callable[[CUDAGraphMode], None]:
+            is_measured_full_capture = (
+                not warmup and desc.cg_mode == CUDAGraphMode.FULL
+            )
+            if is_measured_full_capture and _RCC_STAGE_ID == 5000:
+                torch._C._rcc_stage_begin(5000)
+            if is_measured_full_capture and _RCC_STAGE_ID == 5001:
+                torch._C._rcc_stage_begin(5001)
             num_tokens = desc.num_tokens
             num_reqs = desc.num_reqs or min(num_tokens, self.max_num_reqs)
 
@@ -560,6 +611,8 @@ class ModelCudaGraphManager(CudaGraphManager):
                     for k, v in intermediate_tensors.tensors.items():
                         self.intermediate_tensors[k][:num_tokens] = v
 
+            if is_measured_full_capture and _RCC_STAGE_ID == 5001:
+                torch._C._rcc_stage_end(5001)
             return forward_fn
 
         super().capture(create_forward_fn, progress_bar_desc)
@@ -568,16 +621,29 @@ class ModelCudaGraphManager(CudaGraphManager):
         self, desc: BatchExecutionDescriptor
     ) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]] | IntermediateTensors:
         """Replay a captured FULL cudagraph and return hidden states."""
+        if _RCC_STAGE_ID == 5200:
+            torch._C._rcc_stage_begin(5200)
         super().run_fullgraph(desc)
+        if _RCC_STAGE_ID == 5214:
+            torch._C._rcc_stage_begin(5214)
         if not self.is_last_pp_rank:
             assert self.intermediate_tensors is not None
-            return self.intermediate_tensors[: desc.num_tokens]
-
-        assert self.hidden_states is not None
-        hidden_states = self.hidden_states[: desc.num_tokens]
-        if not self.use_aux_hidden_state_outputs:
-            return hidden_states
-        return hidden_states, [x[: desc.num_tokens] for x in self.aux_hidden_states]
+            output = self.intermediate_tensors[: desc.num_tokens]
+        else:
+            assert self.hidden_states is not None
+            hidden_states = self.hidden_states[: desc.num_tokens]
+            if not self.use_aux_hidden_state_outputs:
+                output = hidden_states
+            else:
+                output = (
+                    hidden_states,
+                    [x[: desc.num_tokens] for x in self.aux_hidden_states],
+                )
+        if _RCC_STAGE_ID == 5214:
+            torch._C._rcc_stage_end(5214)
+        if _RCC_STAGE_ID == 5200:
+            torch._C._rcc_stage_end(5200)
+        return output
 
 
 def prepare_inputs_to_capture(

@@ -19,6 +19,7 @@ instead of embedding feature-specific logic directly.
 
 import functools
 import gc
+import os
 import time
 from copy import deepcopy
 from typing import Any, NamedTuple
@@ -116,6 +117,8 @@ from vllm.v1.worker.lora_model_runner_mixin import LoRAModelRunnerMixin
 from vllm.v1.worker.utils import KVBlockZeroer, copy_kv_cache_blocks_inplace
 
 logger = init_logger(__name__)
+
+_RCC_STAGE_ID = int(os.environ.get("VLLM_RCC_STAGE_ID", "0"))
 
 
 class GPUModelRunner(LoRAModelRunnerMixin):
@@ -1321,6 +1324,10 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         self.eplb.prepare_forward(self.model_config, input_batch.num_tokens)
 
         # Run model.
+        if _RCC_STAGE_ID == 5100:
+            torch._C._rcc_stage_begin(5100)
+        if _RCC_STAGE_ID == 5101:
+            torch._C._rcc_stage_begin(5101)
         if batch_desc.cg_mode == CUDAGraphMode.FULL:
             # Use explicit cudagraph replay for FULL mode.
             # NOTE(woosuk): Here, we don't need to pass the input tensors,
@@ -1347,6 +1354,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
                 skip_compiled=skip_compiled,
                 is_padding=input_batch.is_padding,
             ):
+                if _RCC_STAGE_ID == 5101:
+                    torch._C._rcc_stage_end(5101)
                 self.kv_connector.pre_forward(scheduler_output)
                 if batch_desc.cg_mode == CUDAGraphMode.PIECEWISE:
                     # Run the PIECEWISE graph (compiled PW cudagraph or breakable
@@ -1358,7 +1367,17 @@ class GPUModelRunner(LoRAModelRunnerMixin):
                     )
                 else:
                     # Eager (NONE): call the raw model directly.
+                    if _RCC_STAGE_ID == 5102:
+                        torch._C._rcc_stage_begin(5102)
                     model_output = self.model(**model_inputs)
+                    if _RCC_STAGE_ID == 5102:
+                        torch._C._rcc_stage_end(5102)
+                    if _RCC_STAGE_ID == 5103:
+                        torch._C._rcc_stage_begin(5103)
+            if _RCC_STAGE_ID == 5103:
+                torch._C._rcc_stage_end(5103)
+        if _RCC_STAGE_ID == 5100:
+            torch._C._rcc_stage_end(5100)
 
         if self.is_last_pp_rank:
             if self.use_aux_hidden_state_outputs:

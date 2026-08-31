@@ -6,6 +6,7 @@
 
 #include "quantization/vectorization_utils.cuh"
 #include "concat_mla_q.cuh"
+#include "read_core_cycle_runtime.h"
 
 #ifdef USE_ROCM
   #include "../quantization/w8a8/fp8/amd/quant_utils.cuh"
@@ -730,18 +731,59 @@ void reshape_and_cache(
 // KV_T is the data type of key and value tensors.
 // CACHE_T is the stored data type of kv-cache.
 // KV_DTYPE is the real data type of kv-cache.
-#define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)                \
-  vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>              \
-      <<<grid, block, 0, stream>>>(                                          \
-          reinterpret_cast<KV_T*>(key.data_ptr()),                           \
-          reinterpret_cast<KV_T*>(value.data_ptr()),                         \
-          reinterpret_cast<CACHE_T*>(key_cache.data_ptr()),                  \
-          reinterpret_cast<CACHE_T*>(value_cache.data_ptr()),                \
-          slot_mapping.const_data_ptr<int64_t>(), block_stride, page_stride, \
-          head_stride, key_stride, value_stride, num_heads, head_size,       \
-          block_size, reinterpret_cast<const float*>(k_scale.data_ptr()),    \
-          reinterpret_cast<const float*>(v_scale.data_ptr()),                \
-          kv_scale_stride);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  #define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)              \
+    do {                                                                      \
+      if (rcc_record_s07) {                                                   \
+        const auto rcc_s07_end =                                              \
+            vllm::instrumentation::ReadCoreCycleBoundaryNow();                \
+        vllm::instrumentation::CommitReadCoreCyclePairedSample(               \
+            kRccGraphSite, 7607, rcc_s07_begin, rcc_s07_end);                 \
+      }                                                                       \
+      const bool rcc_record_s08 =                                             \
+          vllm::instrumentation::ReadCoreCycleStageSelected(                  \
+              kRccGraphSite, 7608);                                           \
+      const auto rcc_s08_begin = rcc_record_s08                               \
+          ? vllm::instrumentation::ReadCoreCycleBoundaryNow()                 \
+          : vllm::instrumentation::ReadCoreCycleBoundary{};                   \
+      vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>           \
+          <<<grid, block, 0, stream>>>(                                       \
+              reinterpret_cast<KV_T*>(key.data_ptr()),                        \
+              reinterpret_cast<KV_T*>(value.data_ptr()),                      \
+              reinterpret_cast<CACHE_T*>(key_cache.data_ptr()),               \
+              reinterpret_cast<CACHE_T*>(value_cache.data_ptr()),             \
+              slot_mapping.const_data_ptr<int64_t>(), block_stride,           \
+              page_stride, head_stride, key_stride, value_stride, num_heads,  \
+              head_size, block_size,                                          \
+              reinterpret_cast<const float*>(k_scale.data_ptr()),             \
+              reinterpret_cast<const float*>(v_scale.data_ptr()),             \
+              kv_scale_stride);                                               \
+      if (rcc_record_s08) {                                                   \
+        const auto rcc_s08_end =                                              \
+            vllm::instrumentation::ReadCoreCycleBoundaryNow();                \
+        vllm::instrumentation::CommitReadCoreCyclePairedSample(               \
+            kRccGraphSite, 7608, rcc_s08_begin, rcc_s08_end);                 \
+      }                                                                       \
+      if (rcc_record_s09) {                                                   \
+        rcc_s09_begin =                                                       \
+            vllm::instrumentation::ReadCoreCycleBoundaryNow();                \
+        rcc_s09_started = true;                                               \
+      }                                                                       \
+    } while (false)
+#else
+  #define CALL_RESHAPE_AND_CACHE_FLASH(KV_T, CACHE_T, KV_DTYPE)              \
+    vllm::reshape_and_cache_flash_kernel<KV_T, CACHE_T, KV_DTYPE>             \
+        <<<grid, block, 0, stream>>>(                                         \
+            reinterpret_cast<KV_T*>(key.data_ptr()),                          \
+            reinterpret_cast<KV_T*>(value.data_ptr()),                        \
+            reinterpret_cast<CACHE_T*>(key_cache.data_ptr()),                 \
+            reinterpret_cast<CACHE_T*>(value_cache.data_ptr()),               \
+            slot_mapping.const_data_ptr<int64_t>(), block_stride, page_stride,\
+            head_stride, key_stride, value_stride, num_heads, head_size,      \
+            block_size, reinterpret_cast<const float*>(k_scale.data_ptr()),   \
+            reinterpret_cast<const float*>(v_scale.data_ptr()),               \
+            kv_scale_stride)
+#endif
 
 void reshape_and_cache_flash(
     torch::stable::Tensor& key,    // [num_tokens, num_heads, head_size]
@@ -754,6 +796,15 @@ void reshape_and_cache_flash(
     const std::string& kv_cache_dtype,
     torch::stable::Tensor& k_scale,    // [1] or [num_heads]
     torch::stable::Tensor& v_scale) {  // [1] or [num_heads]
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  constexpr std::uint16_t kRccGraphSite = 700;
+  const bool rcc_record_s01 =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, 7601);
+  const auto rcc_s01_begin = rcc_record_s01
+      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
+      : vllm::instrumentation::ReadCoreCycleBoundary{};
+#endif
   // NOTE(woosuk): In vLLM V1, key.size(0) can be different from
   // slot_mapping.size(0) because of padding for CUDA graphs.
   // In vLLM V0, key.size(0) is always equal to slot_mapping.size(0) because
@@ -768,11 +819,64 @@ void reshape_and_cache_flash(
   int num_heads = key.size(1);
   int head_size = key.size(2);
 
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (rcc_record_s01) {
+    const auto rcc_s01_end =
+        vllm::instrumentation::ReadCoreCycleBoundaryNow();
+    vllm::instrumentation::CommitReadCoreCyclePairedSample(
+        kRccGraphSite, 7601, rcc_s01_begin, rcc_s01_end);
+  }
+  const bool rcc_record_s02 =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, 7602);
+  const auto rcc_s02_begin = rcc_record_s02
+      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
+      : vllm::instrumentation::ReadCoreCycleBoundary{};
+#endif
   const torch::stable::accelerator::DeviceGuard device_guard(
       key.get_device_index());
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (rcc_record_s02) {
+    const auto rcc_s02_end =
+        vllm::instrumentation::ReadCoreCycleBoundaryNow();
+    vllm::instrumentation::CommitReadCoreCyclePairedSample(
+        kRccGraphSite, 7602, rcc_s02_begin, rcc_s02_end);
+  }
+  const bool rcc_record_s03 =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, 7603);
+  const auto rcc_s03_begin = rcc_record_s03
+      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
+      : vllm::instrumentation::ReadCoreCycleBoundary{};
+#endif
   const cudaStream_t stream = get_current_cuda_stream();
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (rcc_record_s03) {
+    const auto rcc_s03_end =
+        vllm::instrumentation::ReadCoreCycleBoundaryNow();
+    vllm::instrumentation::CommitReadCoreCyclePairedSample(
+        kRccGraphSite, 7603, rcc_s03_begin, rcc_s03_end);
+  }
+  const bool rcc_record_s04 =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, 7604);
+  const auto rcc_s04_begin = rcc_record_s04
+      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
+      : vllm::instrumentation::ReadCoreCycleBoundary{};
+  const auto rcc_finish_s04 = [&]() {
+    if (rcc_record_s04) {
+      const auto rcc_s04_end =
+          vllm::instrumentation::ReadCoreCycleBoundaryNow();
+      vllm::instrumentation::CommitReadCoreCyclePairedSample(
+          kRccGraphSite, 7604, rcc_s04_begin, rcc_s04_end);
+    }
+  };
+#endif
 
   if (kv_cache_dtype == "nvfp4") {
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+    rcc_finish_s04();
+#endif
 #if defined(ENABLE_NVFP4_SM100) || defined(ENABLE_NVFP4_SM120)
     // NVFP4 dispatch is compiled separately for SM100+.
     extern void reshape_and_cache_nvfp4_dispatch(
@@ -792,6 +896,15 @@ void reshape_and_cache_flash(
   }
 
   // Original FP8/auto path.
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  rcc_finish_s04();
+  const bool rcc_record_s05 =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, 7605);
+  const auto rcc_s05_begin = rcc_record_s05
+      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
+      : vllm::instrumentation::ReadCoreCycleBoundary{};
+#endif
   int block_size = key_cache.size(1);
 
   int64_t key_stride = key.stride(0);
@@ -807,12 +920,55 @@ void reshape_and_cache_flash(
                   "k_scale and v_scale must be of shape [1] or [num_heads]");
   int kv_scale_stride = (k_scale.numel() > 1) ? 1 : 0;
 
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (rcc_record_s05) {
+    const auto rcc_s05_end =
+        vllm::instrumentation::ReadCoreCycleBoundaryNow();
+    vllm::instrumentation::CommitReadCoreCyclePairedSample(
+        kRccGraphSite, 7605, rcc_s05_begin, rcc_s05_end);
+  }
+  const bool rcc_record_s06 =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, 7606);
+  const auto rcc_s06_begin = rcc_record_s06
+      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
+      : vllm::instrumentation::ReadCoreCycleBoundary{};
+#endif
   dim3 grid(num_tokens);
   dim3 block(std::min(num_heads * head_size, 512));
 
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (rcc_record_s06) {
+    const auto rcc_s06_end =
+        vllm::instrumentation::ReadCoreCycleBoundaryNow();
+    vllm::instrumentation::CommitReadCoreCyclePairedSample(
+        kRccGraphSite, 7606, rcc_s06_begin, rcc_s06_end);
+  }
+  const bool rcc_record_s07 =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, 7607);
+  const auto rcc_s07_begin = rcc_record_s07
+      ? vllm::instrumentation::ReadCoreCycleBoundaryNow()
+      : vllm::instrumentation::ReadCoreCycleBoundary{};
+  const bool rcc_record_s09 =
+      vllm::instrumentation::ReadCoreCycleStageSelected(
+          kRccGraphSite, 7609);
+  bool rcc_s09_started = false;
+  vllm::instrumentation::ReadCoreCycleBoundary rcc_s09_begin{};
+#endif
   DISPATCH_BY_KV_CACHE_DTYPE(key.scalar_type(), kv_cache_dtype,
                              CALL_RESHAPE_AND_CACHE_FLASH);
+#if VLLM_RCC_PROFILE_ENABLED(VLLM_RCC_PROFILE_ALL_SITES)
+  if (rcc_record_s09 && rcc_s09_started) {
+    const auto rcc_s09_end =
+        vllm::instrumentation::ReadCoreCycleBoundaryNow();
+    vllm::instrumentation::CommitReadCoreCyclePairedSample(
+        kRccGraphSite, 7609, rcc_s09_begin, rcc_s09_end);
+  }
+#endif
 }
+
+#undef CALL_RESHAPE_AND_CACHE_FLASH
 
 // KV_T is the data type of key and value tensors.
 // CACHE_T is the stored data type of kv-cache.
